@@ -56,7 +56,7 @@ class TTSService {
     voiceName: 'Kore', // Feminine, warm voice (perfect for Anshika)
     model: 'gemini-2.5-flash-preview-tts',
     speakingRate: 1.0, // Natural speed
-    useHighQuality: true, // Default to high quality Gemini TTS
+    useHighQuality: false, // DISABLED: Gemini TTS has issues, use fast Google Cloud TTS instead
   };
 
   private currentAudio: HTMLAudioElement | null = null;
@@ -181,9 +181,11 @@ class TTSService {
     try {
       // Choose TTS engine based on quality setting
       if (this.config.useHighQuality && !this.quotaExceeded) {
+        console.log('%c🎤 USING: Gemini 2.5 Flash TTS (Ultra-Realistic)', 'background: linear-gradient(to right, #9333ea, #ec4899); color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;');
         // Use Gemini 2.5 Flash TTS (slow but super realistic)
         await this.speakWithGeminiTTS(cleanedText);
       } else {
+        console.log('%c⚡ USING: Fast Google Cloud TTS (Reliable)', 'background: linear-gradient(to right, #3b82f6, #06b6d4); color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;');
         // Use fast Google Cloud TTS (instant but less realistic)
         await this.speakWithFastTTS(cleanedText);
       }
@@ -212,6 +214,25 @@ class TTSService {
   private async speakWithGeminiTTS(text: string): Promise<void> {
     console.log('🎤 Gemini TTS (optimized)');
     
+    // Validate text is suitable for TTS
+    if (!text || text.trim().length === 0) {
+      console.warn('⚠️ Empty text, skipping Gemini TTS');
+      return;
+    }
+    
+    // If text is too short (< 3 chars), use fast TTS instead
+    if (text.trim().length < 3) {
+      console.log('📝 Text too short for Gemini TTS, using fast TTS');
+      return this.speakWithFastTTS(text);
+    }
+    
+    // If text is too long (> 1500 chars), use fast TTS to avoid API issues
+    // Gemini TTS works well with medium-length texts but may have issues with very long ones
+    if (text.trim().length > 1500) {
+      console.log('📏 Text too long for Gemini TTS (>1500 chars), using fast TTS');
+      return this.speakWithFastTTS(text);
+    }
+    
     // Get API key from secure storage
     const apiKey = await secureStorage.getApiKey('VITE_GEMINI_API_KEY');
     
@@ -221,6 +242,8 @@ class TTSService {
     
     // Keep full text, don't truncate (user wants full audio)
     const textToSpeak = text;
+    
+    console.log(`📤 Sending to Gemini TTS: "${textToSpeak.substring(0, 50)}${textToSpeak.length > 50 ? '...' : ''}" (${textToSpeak.length} chars)`);
     
     // Call Gemini 2.5 Flash TTS directly
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.config.model}:generateContent?key=${apiKey}`;
@@ -244,7 +267,7 @@ class TTSService {
     };
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000); // 30 second timeout (was 8s)
+    const timeout = setTimeout(() => controller.abort(), 60000); // 60 second timeout for Gemini TTS
 
     try {
       const response = await fetch(url, {
@@ -260,16 +283,41 @@ class TTSService {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Gemini TTS failed');
+        const errorMessage = errorData.error?.message || 'Gemini TTS failed';
+        console.warn(`%c⚠️ Gemini TTS API error (${response.status}): ${errorMessage}`, 'color: #f59e0b; font-weight: bold;');
+        console.log('%c🔄 Auto-fallback to Fast Google Cloud TTS', 'background: #3b82f6; color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;');
+        // Fallback to fast TTS instead of throwing error
+        return this.speakWithFastTTS(text);
       }
 
       const data = await response.json();
       
+      // Check for blocked/refused generation
+      const finishReason = data.candidates?.[0]?.finishReason;
+      if (finishReason === 'OTHER' || finishReason === 'SAFETY' || finishReason === 'RECITATION') {
+        console.warn(`%c⚠️ Gemini TTS refused (${finishReason})`, 'color: #f59e0b; font-weight: bold;');
+        console.log('%c🔄 Auto-fallback to Fast Google Cloud TTS', 'background: #3b82f6; color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;');
+        return this.speakWithFastTTS(text);
+      }
+      
+      // Log response structure for debugging
+      console.log('🔍 Gemini TTS response structure:', {
+        hasCandidates: !!data.candidates,
+        candidatesLength: data.candidates?.length,
+        hasContent: !!data.candidates?.[0]?.content,
+        finishReason: finishReason,
+        partsLength: data.candidates?.[0]?.content?.parts?.length,
+        firstPartKeys: data.candidates?.[0]?.content?.parts?.[0] ? Object.keys(data.candidates[0].content.parts[0]) : []
+      });
+      
       // Extract audio data from response
       const audioPart = data.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
       
-      if (!audioPart) {
-        throw new Error('No audio data in response');
+      if (!audioPart || !audioPart.inlineData?.data) {
+        console.warn('⚠️ No audio data in Gemini TTS response, falling back to fast TTS');
+        console.warn('📋 Full response:', JSON.stringify(data, null, 2).substring(0, 500));
+        // Fallback to fast TTS instead of throwing error
+        return this.speakWithFastTTS(text);
       }
 
       const audioBase64 = audioPart.inlineData.data;
@@ -293,7 +341,10 @@ class TTSService {
     } catch (error: any) {
       clearTimeout(timeout);
       if (error.name === 'AbortError') {
-        throw new Error('TTS took too long (>30s). Try shorter messages.');
+        console.warn('%c⏱️ Gemini TTS timeout (>60s)', 'color: #f59e0b; font-weight: bold;');
+        console.log('%c🔄 Auto-fallback to Fast Google Cloud TTS', 'background: #3b82f6; color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;');
+        // Fallback to fast TTS instead of throwing error
+        return this.speakWithFastTTS(text);
       }
       throw error;
     }
@@ -556,6 +607,8 @@ class TTSService {
    * Stop current speech
    */
   public stop() {
+    console.log('🛑 Stopping TTS playback');
+    
     if (this.currentAudio) {
       this.currentAudio.pause();
       this.currentAudio.currentTime = 0;
@@ -566,11 +619,15 @@ class TTSService {
       window.speechSynthesis.cancel();
     }
 
+    this.webSpeechUtterance = null;
+    
     this.state.isSpeaking = false;
     this.state.isPaused = false;
     this.state.currentText = null;
     this.state.usingFallback = false;
     this.notifyStateChange();
+    
+    console.log('✅ TTS stopped successfully');
   }
 
   /**

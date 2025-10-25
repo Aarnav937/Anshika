@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Trash2, Search } from 'lucide-react';
+import { Send, Trash2, Search, Mic } from 'lucide-react';
 import { useChat } from '../contexts/ChatContext';
 import { useTTS } from '../contexts/TTSContext';
+import { useSpeechRecognition } from '../contexts/SpeechRecognitionContext';
+import { useToast } from '../contexts/ToastContext';
 import MessageBubble from './MessageBubble';
 import { sendGeminiMessage } from '../services/geminiService';
 import { sendOllamaMessage } from '../services/ollamaService';
@@ -36,6 +38,8 @@ const ChatInterface: React.FC = () => {
     addReaction,
   } = useChat();
   const { speak, autoSpeakEnabled } = useTTS();
+  const { state: sttState, startListening, stopListening, isSupported: sttSupported } = useSpeechRecognition();
+  const { showToast } = useToast();
   const [input, setInput] = useState('');
   const [streamingMessage, setStreamingMessage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -44,6 +48,9 @@ const ChatInterface: React.FC = () => {
   // Command system state
   const [showCommandAutocomplete, setShowCommandAutocomplete] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Voice input state
+  const [interimTranscript, setInterimTranscript] = useState('');
 
   // Edit preview state
   const [showEditPreview, setShowEditPreview] = useState(false);
@@ -421,6 +428,39 @@ const ChatInterface: React.FC = () => {
     handleSendMessage();
   };
 
+  const handleVoiceInput = () => {
+    if (!sttSupported) {
+      showToast('Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.', 'error');
+      return;
+    }
+
+    if (sttState.isListening) {
+      // Stop listening
+      stopListening();
+      setInterimTranscript('');
+    } else {
+      // Start listening
+      setInterimTranscript('');
+      startListening(
+        (transcript, isFinal) => {
+          if (isFinal) {
+            // Final transcript - add to input
+            setInput((prev) => prev + (prev ? ' ' : '') + transcript);
+            setInterimTranscript('');
+          } else {
+            // Interim transcript - show in banner
+            setInterimTranscript(transcript);
+          }
+        },
+        (error) => {
+          // Error callback
+          showToast(error, 'error');
+          setInterimTranscript('');
+        }
+      );
+    }
+  };
+
   const handleEditMessage = async (id: string, newContent: string) => {
     // Find the edited message and any AI responses that came after it
     const messageIndex = messages.findIndex(m => m.id === id);
@@ -677,6 +717,34 @@ const ChatInterface: React.FC = () => {
 
         {/* Input Area */}
         <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-800/50">
+          {/* Listening Indicator Banner */}
+          {sttState.isListening && (
+            <div className="mb-4 p-4 bg-gradient-to-r from-purple-600/90 to-pink-600/90 backdrop-blur-md rounded-xl border border-purple-400/30 shadow-lg animate-fade-in">
+              <div className="flex items-center gap-3">
+                <Mic className="w-5 h-5 text-white animate-pulse" />
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-white">
+                    🎤 Listening...
+                  </div>
+                  {interimTranscript && (
+                    <div className="text-xs text-purple-200 mt-1">
+                      "{interimTranscript}"
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    stopListening();
+                    setInterimTranscript('');
+                  }}
+                  className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm rounded-lg font-medium transition-colors"
+                >
+                  Stop
+                </button>
+              </div>
+            </div>
+          )}
+          
           {/* Intent Suggestion (Task 3.2) */}
           {intentDetection.shouldShowSuggestionUI && intentDetection.currentIntent && (
             <IntentSuggestion
@@ -744,7 +812,27 @@ const ChatInterface: React.FC = () => {
                 </button>
               )}
 
-              {/* Voice functionality removed */}
+              {/* Voice Input Button */}
+              <button
+                onClick={handleVoiceInput}
+                disabled={isLoading || !sttSupported}
+                className={`btn-press ripple interactive-element focus-ring touch-target touch-target-mobile flex items-center justify-center w-11 h-11 rounded-xl shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 tap-highlight no-select ${
+                  sttState.isListening
+                    ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white focus:ring-red-500 border-2 border-red-400 animate-pulse'
+                    : sttSupported
+                    ? 'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white focus:ring-purple-500 border-2 border-purple-400'
+                    : 'bg-gradient-to-r from-gray-400 to-gray-500 text-gray-200 cursor-not-allowed opacity-60'
+                }`}
+                title={
+                  !sttSupported
+                    ? 'Speech recognition not supported in this browser'
+                    : sttState.isListening
+                    ? 'Stop voice input'
+                    : 'Start voice input'
+                }
+              >
+                <Mic className={`w-4 h-4 ${sttState.isListening ? 'animate-pulse' : ''}`} />
+              </button>
 
               <button
                 onClick={handleSendClick}

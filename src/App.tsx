@@ -10,7 +10,8 @@ import { EnhancedStatusIndicator } from './components/EnhancedStatusIndicator';
 import { ChatProvider, useChat } from './contexts/ChatContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { TTSProvider, useTTS } from './contexts/TTSContext';
-import { TTSSettingsPanel } from './components/TTSSettingsPanel';
+import { SpeechRecognitionProvider } from './contexts/SpeechRecognitionContext';
+import { VoiceSettingsPanel } from './components/VoiceSettingsPanel';
 import { ApiKeysPanel } from './components/ApiKeysPanel';
 import { BreadcrumbNavigation, useBreadcrumbNavigation } from './components/BreadcrumbNavigation';
 import { ContextualHelpTooltip } from './components/ContextualHelpTooltip';
@@ -90,11 +91,11 @@ const ImageGenerationSkeleton = () => (
 
 function AppContent() {
   const { currentMode, setMode, isLoading, selectedModel } = useChat();
-  const { autoSpeakEnabled, setAutoSpeakEnabled, ttsState } = useTTS();
+  const { autoSpeakEnabled, ttsState } = useTTS();
   const [activeTab, setActiveTab] = useState<TabState>({ mainTab: 'chat', subTab: null });
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showTypographySettings, setShowTypographySettings] = useState(false);
-  const [showTTSSettings, setShowTTSSettings] = useState(false);
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   const [showApiKeys, setShowApiKeys] = useState(false);
   const { breadcrumbs } = useBreadcrumbNavigation();
   const { showToast } = useToast();
@@ -277,11 +278,11 @@ function AppContent() {
                      <Key className="w-5 h-5 text-green-300" />
                    </button>
                    
-                   {/* TTS Settings Button */}
+                   {/* Voice Settings Button (Combined TTS + STT) */}
                    <button
-                     onClick={() => setShowTTSSettings(true)}
+                     onClick={() => setShowVoiceSettings(true)}
                      className="relative p-3 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-400/30 transition-all duration-300 group"
-                     title="Text-to-Speech Settings"
+                     title="Voice Settings (Text-to-Speech & Speech-to-Text)"
                    >
                      <Volume2 className={`w-5 h-5 transition-colors ${ttsState.isSpeaking ? 'text-purple-400 animate-pulse' : 'text-purple-300'}`} />
                      {ttsState.isSpeaking && (
@@ -391,12 +392,10 @@ function AppContent() {
         onClose={() => setShowApiKeys(false)}
       />
 
-      {/* TTS Settings Panel */}
-      <TTSSettingsPanel
-        isOpen={showTTSSettings}
-        onClose={() => setShowTTSSettings(false)}
-        autoSpeakEnabled={autoSpeakEnabled}
-        onAutoSpeakToggle={setAutoSpeakEnabled}
+      {/* Voice Settings Panel (Combined TTS + STT) */}
+      <VoiceSettingsPanel
+        isOpen={showVoiceSettings}
+        onClose={() => setShowVoiceSettings(false)}
       />
 
       {/* Keyboard Shortcuts Modal */}
@@ -419,7 +418,9 @@ function App() {
     <ChatProvider>
       <ToastProvider>
         <TTSProvider>
-          <AppContent />
+          <SpeechRecognitionProvider>
+            <AppContent />
+          </SpeechRecognitionProvider>
         </TTSProvider>
       </ToastProvider>
     </ChatProvider>

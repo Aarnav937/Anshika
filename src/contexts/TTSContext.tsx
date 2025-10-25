@@ -10,7 +10,9 @@ import { ttsService, TTSState } from '../services/ttsService';
 interface TTSContextType {
   ttsState: TTSState;
   autoSpeakEnabled: boolean;
+  useHighQualityTTS: boolean;
   setAutoSpeakEnabled: (enabled: boolean) => void;
+  setUseHighQualityTTS: (enabled: boolean) => void;
   speak: (text: string) => Promise<void>;
   pause: () => void;
   resume: () => void;
@@ -27,6 +29,10 @@ export const TTSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const saved = localStorage.getItem('anshika_autoSpeak');
     return saved ? JSON.parse(saved) : true; // Default to enabled
   });
+  const [useHighQualityTTS, setUseHighQualityTTS] = useState(() => {
+    const saved = localStorage.getItem('anshika_useHighQualityTTS');
+    return saved ? JSON.parse(saved) : false; // Default to fast TTS (more reliable)
+  });
 
   useEffect(() => {
     // Subscribe to TTS state changes
@@ -41,6 +47,12 @@ export const TTSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Save auto-speak preference
     localStorage.setItem('anshika_autoSpeak', JSON.stringify(autoSpeakEnabled));
   }, [autoSpeakEnabled]);
+
+  useEffect(() => {
+    // Save high-quality TTS preference and update service config
+    localStorage.setItem('anshika_useHighQualityTTS', JSON.stringify(useHighQualityTTS));
+    ttsService.updateConfig({ useHighQuality: useHighQualityTTS });
+  }, [useHighQualityTTS]);
 
   const speak = async (text: string) => {
     if (autoSpeakEnabled && !ttsState.isMuted) {
@@ -73,7 +85,9 @@ export const TTSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       value={{
         ttsState,
         autoSpeakEnabled,
+        useHighQualityTTS,
         setAutoSpeakEnabled,
+        setUseHighQualityTTS,
         speak,
         pause,
         resume,

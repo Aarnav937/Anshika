@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>A.N.S.H.I.K.A. - Online & Offline Modes</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Buffer polyfill for browser compatibility -->
+    <script>
+      if (typeof globalThis.Buffer === 'undefined') {
+        globalThis.Buffer = {
+          from: (data) => new TextEncoder().encode(data),
+          alloc: (size) => new Uint8Array(size),
+          isBuffer: (obj) => obj instanceof Uint8Array,
+        };
+      }
+
+      // Suppress browser extension errors (translations, runtime.lastError, etc.)
+      // These errors come from extensions like Google Translate, React DevTools
+      // and don't affect the app functionality
+      window.addEventListener('error', function(event) {
+        // Check if error is from browser extension (bundle.js, chrome-extension://)
+        if (event.filename && (
+          event.filename.includes('bundle.js') || 
+          event.filename.includes('chrome-extension://') ||
+          event.filename.includes('moz-extension://') ||
+          event.filename.includes('extensions/')
+        )) {
+          console.warn('🔕 Suppressed browser extension error:', event.message);
+          event.preventDefault();
+          return true;
+        }
+      });
+
+      // Suppress unhandled promise rejections from extensions
+      window.addEventListener('unhandledrejection', function(event) {
+        const error = event.reason;
+        if (error && error.stack && (
+          error.stack.includes('bundle.js') ||
+          error.stack.includes('chrome-extension://') ||
+          error.stack.includes('translations')
+        )) {
+          console.warn('🔕 Suppressed browser extension promise rejection');
+          event.preventDefault();
+        }
+      });
+
+      // Suppress Chrome runtime.lastError messages
+      if (typeof chrome !== 'undefined' && chrome.runtime) {
+        const originalAddListener = chrome.runtime.onMessage?.addListener;
+        if (originalAddListener) {
+          chrome.runtime.onMessage.addListener = function(...args) {
+            try {
+              return originalAddListener.apply(this, args);
+            } catch (e) {
+              // Silently catch extension communication errors
+              return undefined;
+            }
+          };
+        }
+      }
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

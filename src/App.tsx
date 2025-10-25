@@ -11,6 +11,7 @@ import { ChatProvider, useChat } from './contexts/ChatContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { TTSProvider, useTTS } from './contexts/TTSContext';
 import { SpeechRecognitionProvider } from './contexts/SpeechRecognitionContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { VoiceSettingsPanel } from './components/VoiceSettingsPanel';
 import { ApiKeysPanel } from './components/ApiKeysPanel';
 import { BreadcrumbNavigation, useBreadcrumbNavigation } from './components/BreadcrumbNavigation';
@@ -20,6 +21,7 @@ import { setupFocusVisible, matchesShortcut } from './utils/accessibilityUtils';
 import TypographySettings from './components/TypographySettings';
 import PullToRefresh from './components/PullToRefresh';
 import SwipeNavigation from './components/SwipeNavigation';
+import ThemeToggle from './components/ThemeToggle';
 
 // Lazy-loaded components for code splitting
 const ChatInterface = lazy(() => import('./components/ChatInterface'));
@@ -224,7 +226,7 @@ function AppContent() {
           </p>
 
           {/* Typography Settings Button */}
-          <div className="flex items-center justify-center mt-4">
+          <div className="flex items-center justify-center gap-3 mt-4">
             <button
               onClick={() => setShowTypographySettings(true)}
               className="flex items-center gap-2 px-3 py-1.5 text-xs bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-200 touch-target"
@@ -233,6 +235,11 @@ function AppContent() {
               <Type className="w-3 h-3" />
               Typography
             </button>
+            
+            {/* Theme Toggle */}
+            <div className="flex items-center gap-2">
+              <ThemeToggle size="sm" />
+            </div>
           </div>
 
         </div>
@@ -415,15 +422,17 @@ function AppContent() {
 
 function App() {
   return (
-    <ChatProvider>
-      <ToastProvider>
-        <TTSProvider>
-          <SpeechRecognitionProvider>
-            <AppContent />
-          </SpeechRecognitionProvider>
-        </TTSProvider>
-      </ToastProvider>
-    </ChatProvider>
+    <ThemeProvider>
+      <ChatProvider>
+        <ToastProvider>
+          <TTSProvider>
+            <SpeechRecognitionProvider>
+              <AppContent />
+            </SpeechRecognitionProvider>
+          </TTSProvider>
+        </ToastProvider>
+      </ChatProvider>
+    </ThemeProvider>
   );
 }
 

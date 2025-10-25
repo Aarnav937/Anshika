@@ -2,6 +2,170 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================
+   THEME CSS VARIABLES
+   ============================================ */
+
+:root {
+  /* Light mode - Cosmic theme colors */
+  --theme-primary: #8b5cf6;
+  --theme-secondary: #6366f1;
+  --theme-accent: #ec4899;
+  --theme-bg-base: #f9fafb;
+  --theme-bg-elevated: #ffffff;
+  --theme-bg-overlay: #f3f4f6;
+  --theme-text-primary: #111827;
+  --theme-text-secondary: #6b7280;
+  --theme-text-tertiary: #9ca3af;
+  --theme-border: #e5e7eb;
+  --theme-gradient-start: #8b5cf6;
+  --theme-gradient-end: #6366f1;
+}
+
+.dark {
+  /* Dark mode - Cosmic theme colors */
+  --theme-primary: #a78bfa;
+  --theme-secondary: #818cf8;
+  --theme-accent: #f472b6;
+  --theme-bg-base: #0B0F1A;
+  --theme-bg-elevated: #1A0B2E;
+  --theme-bg-overlay: #2D1B69;
+  --theme-text-primary: #f9fafb;
+  --theme-text-secondary: #d1d5db;
+  --theme-text-tertiary: #9ca3af;
+  --theme-border: #374151;
+  --theme-gradient-start: #8b5cf6;
+  --theme-gradient-end: #6366f1;
+}
+
+/* Ocean theme colors */
+[data-color-theme="ocean"] {
+  --theme-primary: #0891b2;
+  --theme-secondary: #06b6d4;
+  --theme-accent: #22d3ee;
+  --theme-gradient-start: #0891b2;
+  --theme-gradient-end: #06b6d4;
+}
+
+[data-color-theme="ocean"].dark {
+  --theme-primary: #22d3ee;
+  --theme-secondary: #06b6d4;
+  --theme-accent: #67e8f9;
+  --theme-bg-base: #0a192f;
+  --theme-bg-elevated: #112240;
+  --theme-bg-overlay: #1a365d;
+  --theme-text-primary: #e0f2fe;
+  --theme-text-secondary: #bae6fd;
+  --theme-text-tertiary: #7dd3fc;
+  --theme-border: #1e3a8a;
+}
+
+/* Sunset theme colors */
+[data-color-theme="sunset"] {
+  --theme-primary: #f97316;
+  --theme-secondary: #fb923c;
+  --theme-accent: #fbbf24;
+  --theme-gradient-start: #f97316;
+  --theme-gradient-end: #fb923c;
+}
+
+[data-color-theme="sunset"].dark {
+  --theme-primary: #fb923c;
+  --theme-secondary: #f97316;
+  --theme-accent: #fbbf24;
+  --theme-bg-base: #1a0f0a;
+  --theme-bg-elevated: #2d1810;
+  --theme-bg-overlay: #451a03;
+  --theme-text-primary: #fed7aa;
+  --theme-text-secondary: #fdba74;
+  --theme-text-tertiary: #fb923c;
+  --theme-border: #7c2d12;
+}
+
+/* Forest theme colors */
+[data-color-theme="forest"] {
+  --theme-primary: #16a34a;
+  --theme-secondary: #22c55e;
+  --theme-accent: #84cc16;
+  --theme-gradient-start: #16a34a;
+  --theme-gradient-end: #22c55e;
+}
+
+[data-color-theme="forest"].dark {
+  --theme-primary: #22c55e;
+  --theme-secondary: #4ade80;
+  --theme-accent: #a3e635;
+  --theme-bg-base: #0a1f0f;
+  --theme-bg-elevated: #14291a;
+  --theme-bg-overlay: #1a3d23;
+  --theme-text-primary: #dcfce7;
+  --theme-text-secondary: #bbf7d0;
+  --theme-text-tertiary: #86efac;
+  --theme-border: #166534;
+}
+
+/* Rose Gold theme colors */
+[data-color-theme="rose-gold"] {
+  --theme-primary: #ec4899;
+  --theme-secondary: #f472b6;
+  --theme-accent: #fbbf24;
+  --theme-gradient-start: #ec4899;
+  --theme-gradient-end: #f472b6;
+}
+
+[data-color-theme="rose-gold"].dark {
+  --theme-primary: #f472b6;
+  --theme-secondary: #ec4899;
+  --theme-accent: #fbbf24;
+  --theme-bg-base: #1f0a14;
+  --theme-bg-elevated: #2d1020;
+  --theme-bg-overlay: #4a1a2c;
+  --theme-text-primary: #fce7f3;
+  --theme-text-secondary: #fbcfe8;
+  --theme-text-tertiary: #f9a8d4;
+  --theme-border: #831843;
+}
+
+/* Neon Cyber theme colors */
+[data-color-theme="neon-cyber"] {
+  --theme-primary: #a855f7;
+  --theme-secondary: #ec4899;
+  --theme-accent: #06b6d4;
+  --theme-gradient-start: #a855f7;
+  --theme-gradient-end: #ec4899;
+}
+
+[data-color-theme="neon-cyber"].dark {
+  --theme-primary: #c084fc;
+  --theme-secondary: #f472b6;
+  --theme-accent: #22d3ee;
+  --theme-bg-base: #0f0118;
+  --theme-bg-elevated: #1a0524;
+  --theme-bg-overlay: #2d0a47;
+  --theme-text-primary: #f5d0fe;
+  --theme-text-secondary: #e879f9;
+  --theme-text-tertiary: #c084fc;
+  --theme-border: #581c87;
+}
+
+/* ============================================
+   THEME TRANSITIONS
+   ============================================ */
+
+/* Smooth theme transitions - applied after initial render */
+.theme-transition-ready * {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .theme-transition-ready * {
+    transition-duration: 0.01ms !important;
+  }
+}
+
 @layer base {
   body {
     @apply bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100;

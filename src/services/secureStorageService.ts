@@ -15,6 +15,13 @@ class SecureStorageService {
   private async getEncryptionKey(): Promise<CryptoKey> {
     if (this.encryptionKey) return this.encryptionKey;
 
+    // Check if Web Crypto API is available
+    if (!window.crypto?.subtle) {
+      console.warn('⚠️ Web Crypto API not available (requires HTTPS). Using fallback storage.');
+      // Return a dummy key - we'll use base64 encoding instead
+      throw new Error('Web Crypto API not available');
+    }
+
     // Create a deterministic key based on browser fingerprint
     const fingerprint = await this.getBrowserFingerprint();
     const encoder = new TextEncoder();
@@ -54,6 +61,18 @@ class SecureStorageService {
       navigator.hardwareConcurrency || 'unknown',
     ].join('|');
 
+    // Check if crypto.subtle is available (requires HTTPS or localhost)
+    if (!window.crypto?.subtle) {
+      // Fallback: simple hash for non-secure contexts
+      let hash = 0;
+      for (let i = 0; i < data.length; i++) {
+        const char = data.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+      }
+      return Math.abs(hash).toString(16).padStart(16, '0');
+    }
+
     const encoder = new TextEncoder();
     const hashBuffer = await window.crypto.subtle.digest('SHA-256', encoder.encode(data));
     const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -64,30 +83,41 @@ class SecureStorageService {
    * Encrypt data
    */
   private async encrypt(text: string): Promise<string> {
-    const key = await this.getEncryptionKey();
-    const encoder = new TextEncoder();
-    const data = encoder.encode(text);
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    try {
+      const key = await this.getEncryptionKey();
+      const encoder = new TextEncoder();
+      const data = encoder.encode(text);
+      const iv = window.crypto.getRandomValues(new Uint8Array(12));
 
-    const encrypted = await window.crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      key,
-      data
-    );
+      const encrypted = await window.crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        data
+      );
 
-    // Combine IV and encrypted data
-    const combined = new Uint8Array(iv.length + encrypted.byteLength);
-    combined.set(iv);
-    combined.set(new Uint8Array(encrypted), iv.length);
+      // Combine IV and encrypted data
+      const combined = new Uint8Array(iv.length + encrypted.byteLength);
+      combined.set(iv);
+      combined.set(new Uint8Array(encrypted), iv.length);
 
-    // Convert to base64
-    return btoa(String.fromCharCode(...combined));
+      // Convert to base64
+      return btoa(String.fromCharCode(...combined));
+    } catch (error) {
+      // Fallback: simple base64 encoding (not secure, but works without HTTPS)
+      console.warn('⚠️ Encryption failed, using base64 fallback:', error);
+      return 'PLAIN:' + btoa(text);
+    }
   }
 
   /**
    * Decrypt data
    */
   private async decrypt(encryptedText: string): Promise<string> {
+    // Check for fallback encoding
+    if (encryptedText.startsWith('PLAIN:')) {
+      return atob(encryptedText.substring(6));
+    }
+
     try {
       const key = await this.getEncryptionKey();
       const combined = Uint8Array.from(atob(encryptedText), c => c.charCodeAt(0));

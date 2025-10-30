@@ -48,11 +48,16 @@ interface WeatherAPIResponse {
 }
 
 export async function getCurrentWeather(location: string): Promise<string> {
-  // Load API key from secure storage ONLY
-  const apiKey = await secureStorage.getApiKey('VITE_WEATHERAPI_KEY');
+  // Load API key from secure storage or .env fallback
+  let apiKey = await secureStorage.getApiKey('VITE_WEATHERAPI_KEY');
+  
+  if (!apiKey) {
+    // Fallback to .env file
+    apiKey = import.meta.env.VITE_WEATHERAPI_KEY;
+  }
 
   if (!apiKey) {
-    return "⚠️ Weather API key not configured. Please add it in Settings → 🔑 API Keys.";
+    return "⚠️ Weather API key not configured. Please add VITE_WEATHERAPI_KEY to .env file or Settings → 🔑 API Keys.";
   }
 
   try {
@@ -85,11 +90,16 @@ export async function getCurrentWeather(location: string): Promise<string> {
 }
 
 export async function getWeatherForecast(location: string, days: number = 3): Promise<string> {
-  // Load API key from secure storage ONLY
-  const apiKey = await secureStorage.getApiKey('VITE_WEATHERAPI_KEY');
+  // Load API key from secure storage or .env fallback
+  let apiKey = await secureStorage.getApiKey('VITE_WEATHERAPI_KEY');
+  
+  if (!apiKey) {
+    // Fallback to .env file
+    apiKey = import.meta.env.VITE_WEATHERAPI_KEY;
+  }
 
   if (!apiKey) {
-    return "⚠️ Weather API key not configured. Please add it in Settings → 🔑 API Keys.";
+    return "⚠️ Weather API key not configured. Please add VITE_WEATHERAPI_KEY to .env file or Settings → 🔑 API Keys.";
   }
 
   try {

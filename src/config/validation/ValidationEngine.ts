@@ -397,9 +397,6 @@ export class ValidationEngine {
     const errors: string[] = [];
     const warnings: string[] = [];
 
-    // Check for conflicting configurations
-    const voiceUpdate = updates.find(u => u.key === 'voice.enabled');
-
     // Check for API key requirements
     const geminiTempUpdate = updates.find(u => u.key === 'ai.gemini.temperature');
     const geminiKeyUpdate = updates.find(u => u.key === 'ai.gemini.api_key');

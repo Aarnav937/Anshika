@@ -8,17 +8,24 @@ import { detectContext, shouldSwitchMode } from './contextDetector';
 import { analyzeSentiment } from './sentimentAnalyzer';
 import { secureStorage } from './secureStorageService';
 
-// API Key from secure storage ONLY (no .env fallback)
+// API Key from secure storage or .env fallback
 let GEMINI_API_KEY: string | null = null;
 
-// Load API key from secure storage on initialization
+// Load API key from secure storage or .env on initialization
 (async () => {
   const storedKey = await secureStorage.getApiKey('VITE_GEMINI_API_KEY');
   if (storedKey) {
     GEMINI_API_KEY = storedKey;
     console.log('🔐 Loaded Gemini API key from secure storage');
   } else {
-    console.warn('⚠️ No Gemini API key found in secure storage. Please add it in Settings → 🔑 API Keys.');
+    // Fallback to .env file
+    const envKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (envKey) {
+      GEMINI_API_KEY = envKey;
+      console.log('🔑 Loaded Gemini API key from .env file');
+    } else {
+      console.warn('⚠️ No Gemini API key found. Please add VITE_GEMINI_API_KEY to .env file or Settings → 🔑 API Keys.');
+    }
   }
 })();
 

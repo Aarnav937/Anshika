@@ -113,7 +113,7 @@ export const DEFAULT_CONFIG = {
   'ai.mode': 'online',
   'ai.temperature.online': 0.7,
   'ai.temperature.offline': 0.8,
-  'ai.model.gemini': 'gemini-2.0-flash-exp',
+  'ai.model.gemini': 'gemini-2.5-flash-exp',
   'ai.model.ollama': 'llama3.2',
   'ai.maxTokens': 4096,
   'ai.stream': true,

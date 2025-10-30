@@ -106,6 +106,40 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           />
         ) : (
           <div className="leading-relaxed">
+            {/* Display uploaded images for user messages */}
+            {isUser && message.images && message.images.length > 0 && (
+              <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {message.images.map((imageData: any, index: number) => (
+                  <div key={index} className="relative">
+                    <img
+                      src={imageData.preview || imageData.file}
+                      alt={`Uploaded image ${index + 1}`}
+                      className="rounded-lg w-full h-auto max-h-48 object-cover shadow-md hover:shadow-lg interactive-element cursor-pointer scale-transition"
+                      onClick={() => {
+                        // Create a modal or lightbox view
+                        const modal = document.createElement('div');
+                        modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50';
+                        modal.innerHTML = `
+                          <div class="max-w-4xl max-h-screen p-4">
+                            <img src="${imageData.preview || imageData.file}" alt="Full size image" class="max-w-full max-h-full object-contain rounded-lg" />
+                            <button class="absolute top-4 right-4 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600" onclick="this.parentElement.parentElement.remove()">×</button>
+                          </div>
+                        `;
+                        modal.onclick = (e) => {
+                          if (e.target === modal) modal.remove();
+                        };
+                        document.body.appendChild(modal);
+                      }}
+                      style={{ maxHeight: '200px', objectFit: 'cover' }}
+                    />
+                    <div className="absolute bottom-1 left-1 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
+                      {imageData.file?.name || `Image ${index + 1}`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {contentParts.map((part, index) => {
               if (part.type === 'image') {
                 return (

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ChatMode, Message, ChatState } from '../types';
+import { streamingGeminiService, StreamingOptions } from '../services/streamingGeminiService';
 
 // MEMORY DISABLED - Simple in-memory storage only
 const initialState: ChatState = {
@@ -12,6 +13,14 @@ const initialState: ChatState = {
   offlineTemperature: 0.7,
   webSearchEnabled: true,  // ENABLED BY DEFAULT
   voiceEnabled: false,
+  // Streaming state
+  isStreaming: false,
+  currentStreamId: null,
+  streamingMessage: null,
+  streamingEnabled: true,
+  streamingChunkDelay: 50,
+  streamingAutoScroll: true,
+  streamingShowTypingIndicator: true,
 };
 
 export function useChatStore() {
@@ -142,6 +151,152 @@ export function useChatStore() {
     }));
   }, []);
 
+  // Streaming methods
+  const startStreaming = useCallback(async (message: string, options?: StreamingOptions, images?: File[]): Promise<string> => {
+    setState(prev => ({ ...prev, isStreaming: true }));
+
+    try {
+      // Create a streaming message placeholder
+      const streamingMessageId = crypto.randomUUID();
+      const streamingMessage: Message = {
+        id: streamingMessageId,
+        content: '',
+        role: 'assistant',
+        timestamp: new Date(),
+        mode: state.currentMode,
+        isStreaming: true,
+      };
+
+      setState(prev => ({
+        ...prev,
+        streamingMessage,
+        currentStreamId: streamingMessageId,
+        messages: [...prev.messages, streamingMessage],
+      }));
+
+      // Prepare streaming options with callbacks
+      const streamingOptions: StreamingOptions = {
+        temperature: state.onlineTemperature,
+        webSearchEnabled: state.webSearchEnabled,
+        ...options,
+        onStart: () => {
+          console.log('🎬 Streaming started');
+          options?.onStart?.();
+        },
+        onChunk: (chunk: string) => {
+          setState(prev => {
+            if (prev.streamingMessage) {
+              const updatedMessage = {
+                ...prev.streamingMessage,
+                content: prev.streamingMessage.content + chunk,
+              };
+              return {
+                ...prev,
+                streamingMessage: updatedMessage,
+                messages: prev.messages.map(msg =>
+                  msg.id === streamingMessageId ? updatedMessage : msg
+                ),
+              };
+            }
+            return prev;
+          });
+          options?.onChunk?.(chunk);
+        },
+        onComplete: (fullResponse: string) => {
+          setState(prev => {
+            if (prev.streamingMessage) {
+              const completedMessage = {
+                ...prev.streamingMessage,
+                content: fullResponse,
+                isStreaming: false,
+              };
+              return {
+                ...prev,
+                streamingMessage: null,
+                currentStreamId: null,
+                isStreaming: false,
+                messages: prev.messages.map(msg =>
+                  msg.id === streamingMessageId ? completedMessage : msg
+                ),
+              };
+            }
+            return {
+              ...prev,
+              streamingMessage: null,
+              currentStreamId: null,
+              isStreaming: false,
+            };
+          });
+          options?.onComplete?.(fullResponse);
+        },
+        onError: (error: Error) => {
+          setState(prev => ({
+            ...prev,
+            streamingMessage: null,
+            currentStreamId: null,
+            isStreaming: false,
+          }));
+          options?.onError?.(error);
+        },
+      };
+
+      // Start the streaming request
+      const response = await streamingGeminiService.sendStreamingMessage(message, streamingOptions, images);
+      return response;
+
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        streamingMessage: null,
+        currentStreamId: null,
+        isStreaming: false,
+      }));
+      throw error;
+    }
+  }, [state.onlineTemperature, state.webSearchEnabled]);
+
+  const pauseStreaming = useCallback(() => {
+    if (state.currentStreamId) {
+      streamingGeminiService.pauseStream(state.currentStreamId);
+      setState(prev => ({ ...prev, isStreaming: false }));
+    }
+  }, [state.currentStreamId]);
+
+  const resumeStreaming = useCallback(() => {
+    if (state.currentStreamId) {
+      streamingGeminiService.resumeStream(state.currentStreamId);
+      setState(prev => ({ ...prev, isStreaming: true }));
+    }
+  }, [state.currentStreamId]);
+
+  const cancelStreaming = useCallback(() => {
+    if (state.currentStreamId) {
+      streamingGeminiService.cancelStream(state.currentStreamId);
+      setState(prev => ({
+        ...prev,
+        streamingMessage: null,
+        currentStreamId: null,
+        isStreaming: false,
+      }));
+    }
+  }, [state.currentStreamId]);
+
+  const setStreamingEnabled = useCallback((enabled: boolean) => {
+    setState(prev => ({ ...prev, streamingEnabled: enabled }));
+  }, []);
+
+  const setStreamingChunkDelay = useCallback((delay: number) => {
+    setState(prev => ({ ...prev, streamingChunkDelay: delay }));
+  }, []);
+
+  const setStreamingAutoScroll = useCallback((enabled: boolean) => {
+    setState(prev => ({ ...prev, streamingAutoScroll: enabled }));
+  }, []);
+
+  const setStreamingShowTypingIndicator = useCallback((enabled: boolean) => {
+    setState(prev => ({ ...prev, streamingShowTypingIndicator: enabled }));
+  }, []);
+
   return {
     ...state,
     setMode,
@@ -159,5 +314,14 @@ export function useChatStore() {
     pinMessage,
     deleteMessage,
     addReaction,
+    // Streaming methods
+    startStreaming,
+    pauseStreaming,
+    resumeStreaming,
+    cancelStreaming,
+    setStreamingEnabled,
+    setStreamingChunkDelay,
+    setStreamingAutoScroll,
+    setStreamingShowTypingIndicator,
   };
 }

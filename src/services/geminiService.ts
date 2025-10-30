@@ -84,6 +84,7 @@ export async function sendGeminiMessage(
   updateMessage: (content: string) => void,
   temperature: number = 0.7,
   webSearchEnabled: boolean = false,
+  images?: File[],
   signal?: AbortSignal
 ): Promise<void> {
   if (!GEMINI_API_KEY) {
@@ -98,7 +99,7 @@ export async function sendGeminiMessage(
                 message.toLowerCase().includes('complex') ||
                 message.toLowerCase().includes('detailed analysis');
   
-  const modelName = 'gemini-2.0-flash-exp'; // Use working model
+  const modelName = isPro ? 'gemini-2.5-pro' : 'gemini-2.5-flash-exp'; // Use 2.5 models for multimodal
   const GEMINI_API_URL = `${GEMINI_BASE_URL}/${modelName}:generateContent`;
   
   console.log(`⚡ OPTIMIZED model selection: ${modelName} (${wordCount} words, ${isPro ? 'Pro' : 'Flash'} mode)`);
@@ -145,12 +146,38 @@ export async function sendGeminiMessage(
     // Combine personality prompt with user message
     const enrichedMessage = `${personalityPrompt}\n\n---\n\nUser: ${message}\n\nAnshika:`;
 
+    // Build parts array with text and images
+    const parts: any[] = [{ text: enrichedMessage }];
+
+    // Add images if provided
+    if (images && images.length > 0) {
+      console.log(`📸 Adding ${images.length} image(s) to multimodal request`);
+      
+      for (const image of images) {
+        // Convert image to base64
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(image);
+        });
+        
+        // Remove data URL prefix (e.g., "data:image/png;base64,")
+        const base64 = base64Data.split(',')[1];
+        
+        parts.push({
+          inline_data: {
+            mime_type: image.type,
+            data: base64
+          }
+        });
+      }
+    }
+
     // OPTIMIZED request body for speed
     const requestBody: any = {
       contents: [{
-        parts: [{
-          text: enrichedMessage
-        }]
+        parts: parts
       }],
       generationConfig: {
         temperature: temperature,
@@ -334,7 +361,7 @@ async function makeFollowUpCall(
 ): Promise<string> {
   console.log('🔄 Making follow-up API call with tool results');
 
-  const modelName = 'gemini-2.0-flash-exp'; // Use working model
+  const modelName = 'gemini-2.5-flash-exp'; // Use 2.5 flash for follow-up
   const FOLLOW_UP_URL = `${GEMINI_BASE_URL}/${modelName}:generateContent`;
 
   try {
@@ -670,22 +697,30 @@ export async function deleteGeminiFile(fileName: string): Promise<void> {
 /**
  * Generate content with file context
  * Used for document analysis and Q&A
+ * Supports both uploaded files (PDF) and inline images
  */
 export async function generateWithFileContext(
   prompt: string,
-  fileUri: string,
+  fileUriOrData: string | { data: string; mimeType: string },
   temperature: number = 0.7,
   maxTokens: number = 2048
 ): Promise<string> {
-  const modelName = 'gemini-2.0-flash-exp'; // Use working model
+  const modelName = 'gemini-2.5-flash-exp'; // Use 2.5 flash for multimodal
   const url = `${GEMINI_BASE_URL}/${modelName}:generateContent`;
+
+  let parts: any[] = [{ text: prompt }];
+
+  if (typeof fileUriOrData === 'string') {
+    // Uploaded file (PDF)
+    parts.push({ file_data: { mime_type: 'application/pdf', file_uri: fileUriOrData } });
+  } else {
+    // Inline data (images)
+    parts.push({ inline_data: { mime_type: fileUriOrData.mimeType, data: fileUriOrData.data } });
+  }
 
   const requestBody = {
     contents: [{
-      parts: [
-        { text: prompt },
-        { file_data: { mime_type: 'application/pdf', file_uri: fileUri } }
-      ]
+      parts: parts
     }],
     generationConfig: {
       temperature,

@@ -7,6 +7,11 @@ export interface Message {
   timestamp: Date;
   mode: ChatMode;
   isPinned?: boolean;
+  isStreaming?: boolean;
+  images?: Array<{
+    file: File;
+    preview: string;
+  }>;
   editHistory?: Array<{
     content: string;
     timestamp: Date;
@@ -27,6 +32,14 @@ export interface ChatState {
   offlineTemperature: number;
   webSearchEnabled: boolean;
   voiceEnabled: boolean;
+  // Streaming state
+  isStreaming: boolean;
+  currentStreamId: string | null;
+  streamingMessage: Message | null;
+  streamingEnabled: boolean;
+  streamingChunkDelay: number;
+  streamingAutoScroll: boolean;
+  streamingShowTypingIndicator: boolean;
 }
 
 export interface GeminiResponse {

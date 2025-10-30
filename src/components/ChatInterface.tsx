@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Trash2, Search, Mic } from 'lucide-react';
+import { Send, Trash2, Search, Mic, Image, X } from 'lucide-react';
 import { useChat } from '../contexts/ChatContext';
 import { useTTS } from '../contexts/TTSContext';
 import { useSpeechRecognition } from '../contexts/SpeechRecognitionContext';
 import { useToast } from '../contexts/ToastContext';
 import MessageBubble from './MessageBubble';
-import { sendGeminiMessage } from '../services/geminiService';
+import StreamingMessageBubble from './StreamingMessageBubble';
 import { sendOllamaMessage } from '../services/ollamaService';
 import CommandAutocomplete from './CommandAutocomplete';
 import { CommandParser } from '../services/commandParser';
@@ -27,7 +27,6 @@ const ChatInterface: React.FC = () => {
     isLoading,
     setLoading,
     selectedModel,
-    onlineTemperature,
     offlineTemperature,
     webSearchEnabled,
     setWebSearchEnabled,
@@ -36,12 +35,17 @@ const ChatInterface: React.FC = () => {
     pinMessage,
     deleteMessage,
     addReaction,
+    // Streaming methods
+    isStreaming,
+    startStreaming,
+    pauseStreaming,
+    resumeStreaming,
+    cancelStreaming,
   } = useChat();
   const { speak, autoSpeakEnabled } = useTTS();
   const { state: sttState, startListening, stopListening, isSupported: sttSupported } = useSpeechRecognition();
   const { showToast } = useToast();
   const [input, setInput] = useState('');
-  const [streamingMessage, setStreamingMessage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   
@@ -62,6 +66,14 @@ const ChatInterface: React.FC = () => {
     oldResponseId: string;
   } | null>(null);
 
+  // Undo stack for edit operations
+  const [undoStack, setUndoStack] = useState<Array<{
+    messageId: string;
+    oldContent: string;
+    oldResponseId: string;
+    oldResponseContent: string;
+  }>>([]);
+
   // Toast state
   const [toast, setToast] = useState<{
     message: string;
@@ -69,13 +81,10 @@ const ChatInterface: React.FC = () => {
     onUndo?: () => void;
   } | null>(null);
 
-  // Undo state
-  const [undoStack, setUndoStack] = useState<Array<{
-    messageId: string;
-    oldContent: string;
-    oldResponseId: string;
-    oldResponseContent: string;
-  }>>([]);
+  // Image upload state
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Intent detection system (Task 3.2)
   const conversationHistory = messages.slice(-5).map(m => m.content);
@@ -111,21 +120,13 @@ const ChatInterface: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const updateStreamingMessage = (content: string) => {
-    setStreamingMessage(content);
-    scrollToBottom();
-  };
-
-  const finalizeStreamingMessage = () => {
-    setStreamingMessage(null);
-  };
-
   const cancelCurrentRequest = () => {
-    if (abortControllerRef.current) {
+    if (isStreaming) {
+      cancelStreaming();
+    } else if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
       setLoading(false);
-      finalizeStreamingMessage();
     }
   };
 
@@ -144,6 +145,8 @@ const ChatInterface: React.FC = () => {
 
     const userMessage = messageToSend;
     setInput('');
+    setSelectedImages([]);
+    setImagePreviews([]);
     setShowCommandAutocomplete(false); // Hide autocomplete
 
     // SLASH COMMAND SYSTEM: Check if message is a slash command
@@ -201,15 +204,24 @@ const ChatInterface: React.FC = () => {
         
         try {
           if (currentMode === 'online') {
-            const wrappedAddMessage = (message: { content: string; role: 'assistant'; mode: 'online' }) => {
-              finalizeStreamingMessage();
-              addMessage(message);
-              // Speak the AI response
-              if (autoSpeakEnabled) {
-                speak(message.content).catch(err => console.error('TTS error:', err));
+            // Use streaming for online mode
+            await startStreaming(naturalLanguage, {
+              onComplete: (fullResponse: string) => {
+                // Speak the AI response
+                if (autoSpeakEnabled) {
+                  speak(fullResponse).catch(err => console.error('TTS error:', err));
+                }
+              },
+              onError: (error: Error) => {
+                console.error('Streaming error:', error);
+                // Add error message to chat
+                addMessage({
+                  content: `❌ Streaming error: ${error.message}`,
+                  role: 'assistant',
+                  mode: currentMode,
+                });
               }
-            };
-            await sendGeminiMessage(naturalLanguage, wrappedAddMessage, updateStreamingMessage, onlineTemperature, webSearchEnabled, abortControllerRef.current?.signal);
+            });
           } else {
             const wrappedOfflineAddMessage = (message: { content: string; role: 'assistant'; mode: 'offline' }) => {
               addMessage(message);
@@ -287,8 +299,22 @@ const ChatInterface: React.FC = () => {
       // Medium confidence: Show suggestion (will be rendered in UI below)
       // The suggestion stays active until user accepts/dismisses it
       
-      // Regular message - add it to chat
-      addMessage({ content: userMessage, role: 'user', mode: currentMode });
+      // Regular message - add it to chat with images
+      const messageData: any = { 
+        content: userMessage, 
+        role: 'user', 
+        mode: currentMode 
+      };
+      
+      // Add images to message if any selected
+      if (selectedImages.length > 0) {
+        messageData.images = selectedImages.map((file, index) => ({
+          file,
+          preview: imagePreviews[index]
+        }));
+      }
+      
+      addMessage(messageData);
     }
 
     setLoading(true);
@@ -366,15 +392,24 @@ const ChatInterface: React.FC = () => {
 
     try {
       if (currentMode === 'online') {
-        const wrappedAddMessage = (message: { content: string; role: 'assistant'; mode: 'online' }) => {
-          finalizeStreamingMessage();
-          addMessage(message);
-          // Speak the AI response
-          if (autoSpeakEnabled) {
-            speak(message.content).catch(err => console.error('TTS error:', err));
+        // Use streaming for online mode
+        await startStreaming(userMessage, {
+          onComplete: (fullResponse: string) => {
+            // Speak the AI response
+            if (autoSpeakEnabled) {
+              speak(fullResponse).catch(err => console.error('TTS error:', err));
+            }
+          },
+          onError: (error: Error) => {
+            console.error('Streaming error:', error);
+            // Add error message to chat
+            addMessage({
+              content: `❌ Streaming error: ${error.message}`,
+              role: 'assistant',
+              mode: currentMode,
+            });
           }
-        };
-        await sendGeminiMessage(userMessage, wrappedAddMessage, updateStreamingMessage, onlineTemperature, webSearchEnabled, abortControllerRef.current?.signal);
+        }, selectedImages);
       } else {
         const wrappedOfflineAddMessage = (message: { content: string; role: 'assistant'; mode: 'offline' }) => {
           addMessage(message);
@@ -507,19 +542,21 @@ const ChatInterface: React.FC = () => {
       setLoading(true);
       abortControllerRef.current = new AbortController();
       
-      const wrappedUpdateStreaming = (content: string) => {
-        setEditPreviewData(prev => prev ? { ...prev, newResponse: content } : null);
-      };
-
       if (currentMode === 'online') {
-        const wrappedAddMessage = (message: { content: string; role: 'assistant'; mode: 'online' }) => {
-          setEditPreviewData(prev => prev ? { ...prev, newResponse: message.content, isGenerating: false } : null);
-          // Speak the regenerated AI response
-          if (autoSpeakEnabled) {
-            speak(message.content).catch(err => console.error('TTS error:', err));
+        // Use streaming for edit regeneration
+        await startStreaming(newContent, {
+          onComplete: (fullResponse: string) => {
+            setEditPreviewData(prev => prev ? { ...prev, newResponse: fullResponse, isGenerating: false } : null);
+            // Speak the regenerated AI response
+            if (autoSpeakEnabled) {
+              speak(fullResponse).catch(err => console.error('TTS error:', err));
+            }
+          },
+          onError: (error: Error) => {
+            console.error('Edit streaming error:', error);
+            setEditPreviewData(prev => prev ? { ...prev, newResponse: `Error: ${error.message}`, isGenerating: false } : null);
           }
-        };
-        await sendGeminiMessage(newContent, wrappedAddMessage, wrappedUpdateStreaming, onlineTemperature, webSearchEnabled, abortControllerRef.current?.signal);
+        });
       } else {
         const wrappedOfflineAddMessage = (message: { content: string; role: 'assistant'; mode: 'offline' }) => {
           setEditPreviewData(prev => prev ? { ...prev, newResponse: message.content, isGenerating: false } : null);
@@ -616,6 +653,64 @@ const ChatInterface: React.FC = () => {
     });
   };
 
+  // Image upload handlers
+  const handleImageUpload = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files) return;
+
+    const validFiles: File[] = [];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      if (file.size > maxSize) {
+        showToast(`Image "${file.name}" is too large. Maximum size is 10MB.`, 'error');
+        continue;
+      }
+
+      if (!allowedTypes.includes(file.type)) {
+        showToast(`Image "${file.name}" has unsupported format. Use PNG, JPG, GIF, or WebP.`, 'error');
+        continue;
+      }
+
+      if (selectedImages.length + validFiles.length >= 5) {
+        showToast('Maximum 5 images per message.', 'error');
+        break;
+      }
+
+      validFiles.push(file);
+    }
+
+    if (validFiles.length > 0) {
+      setSelectedImages(prev => [...prev, ...validFiles]);
+
+      // Create previews
+      validFiles.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          if (e.target?.result) {
+            setImagePreviews(prev => [...prev, e.target!.result as string]);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Reset input
+    event.target.value = '';
+  };
+
+  const removeImage = (index: number) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
   // Show skeleton while initially loading
   if (isLoading && messages.length === 0) {
     return <ChatInterfaceSkeleton />;
@@ -658,7 +753,7 @@ const ChatInterface: React.FC = () => {
 
         {/* Messages Area */}
         <div className="h-96 overflow-y-auto p-4 space-y-4 scrollbar-thin">
-          {messages.length === 0 && !streamingMessage ? (
+          {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
               <div className="text-center">
                 <p className="text-lg mb-2">Welcome to A.N.S.H.I.K.A.!</p>
@@ -671,29 +766,26 @@ const ChatInterface: React.FC = () => {
             <>
               {messages.map((message) => (
                 <div key={message.id} id={`message-${message.id}`}>
-                  <MessageBubble
-                    message={message}
-                    onEdit={handleEditMessage}
-                    onPin={pinMessage}
-                    onDelete={deleteMessage}
-                    onReact={addReaction}
-                  />
+                  {message.isStreaming ? (
+                    <StreamingMessageBubble
+                      message={message}
+                      isStreaming={true}
+                      onCancelStreaming={cancelStreaming}
+                      onPauseStreaming={pauseStreaming}
+                      onResumeStreaming={resumeStreaming}
+                    />
+                  ) : (
+                    <MessageBubble
+                      message={message}
+                      onEdit={handleEditMessage}
+                      onPin={pinMessage}
+                      onDelete={deleteMessage}
+                      onReact={addReaction}
+                    />
+                  )}
                 </div>
               ))}
-              {streamingMessage && (
-                <div className="flex justify-start message-bubble">
-                  <div className="chat-message assistant max-w-[75%]">
-                    <div className="whitespace-pre-wrap break-words leading-relaxed">
-                      {streamingMessage}
-                      <span className="animate-pulse text-gray-400">▊</span>
-                    </div>
-                    <div className="text-xs mt-3 opacity-60 text-gray-500">
-                      AI is typing... • {currentMode}
-                    </div>
-                  </div>
-                </div>
-              )}
-              {isLoading && !streamingMessage && currentMode === 'offline' && (
+              {isLoading && !isStreaming && currentMode === 'offline' && (
                 <div className="flex justify-start message-bubble">
                   <div className="chat-message assistant max-w-[75%]">
                     <div className="flex items-center space-x-2">
@@ -764,6 +856,48 @@ const ChatInterface: React.FC = () => {
             />
           )}
           
+          {/* Image Previews */}
+          {imagePreviews.length > 0 && (
+            <div className="mb-4 p-4 bg-white dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  📸 {imagePreviews.length} image{imagePreviews.length > 1 ? 's' : ''} selected
+                </span>
+                <button
+                  onClick={() => {
+                    setSelectedImages([]);
+                    setImagePreviews([]);
+                  }}
+                  className="text-gray-500 hover:text-red-500 transition-colors"
+                  title="Remove all images"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {imagePreviews.map((preview, index) => (
+                  <div key={index} className="relative group">
+                    <img
+                      src={preview}
+                      alt={`Selected image ${index + 1}`}
+                      className="w-full h-20 object-cover rounded-lg border border-gray-300 dark:border-gray-600"
+                    />
+                    <button
+                      onClick={() => removeImage(index)}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                      title="Remove image"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                    <div className="absolute bottom-1 left-1 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
+                      {selectedImages[index]?.name}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
           <div className="flex items-end gap-3">
             <div className="flex-1 relative">
               {/* Command Autocomplete */}
@@ -792,6 +926,35 @@ const ChatInterface: React.FC = () => {
             </div>
 
             <div className="flex gap-2">
+              {/* Image Upload Button */}
+              <button
+                onClick={handleImageUpload}
+                disabled={isLoading}
+                className={`btn-press ripple interactive-element focus-ring touch-target touch-target-mobile flex items-center justify-center w-11 h-11 rounded-xl shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 tap-highlight no-select ${
+                  selectedImages.length > 0
+                    ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white focus:ring-green-500 border-2 border-green-400'
+                    : 'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white focus:ring-purple-500 border-2 border-purple-400'
+                }`}
+                title={selectedImages.length > 0 ? `${selectedImages.length} image(s) selected` : 'Upload images for multimodal chat'}
+              >
+                <Image className="w-4 h-4" />
+                {selectedImages.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {selectedImages.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+
               {currentMode === 'online' && (
                 <button
                   onClick={() => {

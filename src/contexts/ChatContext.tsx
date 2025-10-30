@@ -1,6 +1,7 @@
 import { createContext, useContext, ReactNode } from 'react';
 import { useChatStore } from '../hooks/useChatStore';
 import { ChatState, Message, ChatMode } from '../types';
+import { StreamingOptions } from '../services/streamingGeminiService';
 
 interface ChatContextType extends ChatState {
   setMode: (mode: ChatMode) => void;
@@ -18,6 +19,15 @@ interface ChatContextType extends ChatState {
   pinMessage: (id: string) => void;
   deleteMessage: (id: string) => void;
   addReaction: (id: string, emoji: string) => void;
+  // Streaming methods
+  startStreaming: (message: string, options?: StreamingOptions, images?: File[]) => Promise<string>;
+  pauseStreaming: () => void;
+  resumeStreaming: () => void;
+  cancelStreaming: () => void;
+  setStreamingEnabled: (enabled: boolean) => void;
+  setStreamingChunkDelay: (delay: number) => void;
+  setStreamingAutoScroll: (enabled: boolean) => void;
+  setStreamingShowTypingIndicator: (enabled: boolean) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);

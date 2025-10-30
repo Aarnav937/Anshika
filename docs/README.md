@@ -9,6 +9,8 @@ A.N.S.H.I.K.A. (AI Neural System for Human Interaction, Knowledge Acquisition) i
 - **Dual AI Modes**: Switch between online (Gemini 2.0 Flash) and offline (Ollama) AI processing
 - **Document Intelligence**: Upload, analyze, compare, and search through documents with AI-powered insights
 - **Image Generation**: Create images using Gemini's advanced image generation capabilities
+- **Advanced TTS System**: Ultra-realistic voice synthesis with 6 premium voices and full customization
+- **Voice Controls**: Complete pitch, volume, and speed control for personalized speech
 - **Task Management**: Built-in task tracking and management system
 - **Multimodal Interface**: Text-to-speech, speech-to-text, and voice interactions
 - **Personality System**: Dynamic AI personality adaptation based on context and user interaction
@@ -53,6 +55,8 @@ This documentation is organized into the following sections:
 - **[Internationalization](internationalization.md)** - Multi-language support
 - **[Monitoring](monitoring.md)** - Logging and error tracking
 - **[Troubleshooting](troubleshooting.md)** - Common issues and solutions
+- **[Advanced TTS System](advanced-tts-system.md)** - Comprehensive TTS documentation
+- **[Voice Controls & Customization](voice-controls-customization.md)** - Voice control guide
 
 ### Project Management
 - **[Contributing](contributing.md)** - Contribution guidelines and processes

@@ -37,10 +37,14 @@ class TTSDatabase extends Dexie {
 const db = new TTSDatabase();
 
 export interface TTSConfig {
-  voiceName: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Aoede'; // Gemini 2.5 Flash TTS voices
+  voiceName: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Aoede' | 'Achernar'; // Gemini 2.5 Flash TTS voices + Achernar (Archer)
   model: string;
-  speakingRate: number;
+  speakingRate: number; // New: Voice pitch control (-20.0 to 20.0)
+  pitch: number; // New: Voice pitch control (-20.0 to 20.0)
+  volumeGainDb: number; // New: Volume control (-96.0 to 16.0)
   useHighQuality: boolean; // true = Gemini 2.5 Flash TTS (slow, real), false = Google Cloud TTS (fast)
+  useTurboMode: boolean; // New: true = Maximum speed (short chunks, aggressive caching)
+  styleInstructions?: string; // New: Custom style instructions for TTS
 }
 
 export interface TTSState {
@@ -53,10 +57,13 @@ export interface TTSState {
 
 class TTSService {
   private config: TTSConfig = {
-    voiceName: 'Kore', // Feminine, warm voice (perfect for Anshika)
+    voiceName: 'Achernar', // Confident, commanding voice (perfect for Anshika)
     model: 'gemini-2.5-flash-preview-tts',
     speakingRate: 1.0, // Natural speed
-    useHighQuality: false, // DISABLED: Gemini TTS has issues, use fast Google Cloud TTS instead
+    pitch: 0.0, // Natural pitch
+    volumeGainDb: 0.0, // Natural volume
+    useHighQuality: true, // Default to ultra-realistic Gemini TTS
+    useTurboMode: false, // New: Turbo mode for maximum speed
   };
 
   private currentAudio: HTMLAudioElement | null = null;
@@ -70,7 +77,6 @@ class TTSService {
   };
 
   private stateChangeListeners: Set<(state: TTSState) => void> = new Set();
-  private quotaExceeded = false;
 
   constructor() {
     // Initialize Web Speech API if available
@@ -179,14 +185,12 @@ class TTSService {
     this.notifyStateChange();
 
     try {
-      // Choose TTS engine based on quality setting
-      if (this.config.useHighQuality && !this.quotaExceeded) {
-        console.log('%c🎤 USING: Gemini 2.5 Flash TTS (Ultra-Realistic)', 'background: linear-gradient(to right, #9333ea, #ec4899); color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;');
-        // Use Gemini 2.5 Flash TTS (slow but super realistic)
+      // Check if user wants ultra-realistic Gemini TTS or fast Google Cloud TTS
+      if (this.config.useHighQuality) {
+        console.log('%c🎤 USING: Ultra-Realistic Gemini 2.5 Flash TTS', 'background: linear-gradient(to right, #8b5cf6, #ec4899); color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;');
         await this.speakWithGeminiTTS(cleanedText);
       } else {
-        console.log('%c⚡ USING: Fast Google Cloud TTS (Reliable)', 'background: linear-gradient(to right, #3b82f6, #06b6d4); color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;');
-        // Use fast Google Cloud TTS (instant but less realistic)
+        console.log('%c⚡ USING: Fast Google Cloud TTS', 'background: linear-gradient(to right, #3b82f6, #06b6d4); color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;');
         await this.speakWithFastTTS(cleanedText);
       }
     } catch (error: any) {
@@ -195,7 +199,6 @@ class TTSService {
       // Check if quota exceeded
       if (error.message?.includes('quota') || error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED')) {
         console.warn('Google TTS quota exceeded, falling back to Web Speech API');
-        this.quotaExceeded = true;
         this.state.usingFallback = true;
         this.notifyStateChange();
         
@@ -209,49 +212,338 @@ class TTSService {
   }
 
   /**
-   * Speak using Gemini 2.5 Flash TTS - FASTER (NO CACHE LOOKUP)
+x   * Speak using Google Cloud TTS via proxy (FAST, RELIABLE)
+   */
+  private async speakWithFastTTS(text: string): Promise<void> {
+    const cacheKey = `fast_${text}_en-US-Neural2-C_1.0`;
+
+    // Check cache first
+    const cached = await db.ttsCache
+      .where('text')
+      .equals(cacheKey)
+      .first();
+
+    let audioBlob: Blob;
+
+    if (cached) {
+      console.log('✅ Using cached fast TTS audio');
+      audioBlob = cached.audioBlob;
+    } else {
+      console.log('⚡ Generating fast TTS with Google Cloud Neural2-C');
+
+      // Get API key from secure storage
+      const apiKey = await secureStorage.getApiKey('VITE_GEMINI_API_KEY');
+
+      if (!apiKey) {
+        throw new Error('Gemini API key not found. Please add it in Settings → 🔑 API Keys.');
+      }
+
+      // Use Google Cloud TTS directly for maximum reliability
+      const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
+
+      const requestBody = {
+        input: { text },
+        voice: {
+          languageCode: 'en-US', // Standard English
+          name: 'en-US-Neural2-C', // Natural female voice
+          ssmlGender: 'FEMALE'
+        },
+        audioConfig: {
+          audioEncoding: 'MP3',
+          speakingRate: this.config.speakingRate,
+          pitch: this.config.pitch.toString(),
+          volumeGainDb: this.config.volumeGainDb,
+          effectsProfileId: ['headphone-class-device']
+        }
+      };
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+          const errorData = await response.json();
+
+          // Check for quota exceeded
+          if (errorData.error?.status === 'RESOURCE_EXHAUSTED' || errorData.error?.code === 429) {
+            console.warn('⚠️ Google Cloud TTS quota exceeded, falling back to Web Speech');
+            this.state.usingFallback = true;
+            this.notifyStateChange();
+            return this.speakWithWebSpeech(text);
+          }
+
+          throw new Error(errorData.error?.message || 'Fast TTS synthesis failed');
+        }
+
+        const data = await response.json();
+
+        if (!data.audioContent) {
+          throw new Error('No audio content in response');
+        }
+
+        // Convert base64 to blob
+        const audioData = data.audioContent;
+        const byteCharacters = atob(audioData);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        audioBlob = new Blob([byteArray], { type: 'audio/mpeg' });
+
+        // Cache the audio
+        try {
+          await db.ttsCache.add({
+            text: cacheKey,
+            voiceName: 'en-US-Neural2-C',
+            audioBlob,
+            timestamp: Date.now(),
+          });
+          console.log('💾 Cached fast TTS audio');
+        } catch (cacheError) {
+          console.warn('Failed to cache audio:', cacheError);
+        }
+      } catch (error: any) {
+        clearTimeout(timeout);
+        if (error.name === 'AbortError') {
+          console.warn('⏱️ Fast TTS timeout, falling back to Web Speech');
+          this.state.usingFallback = true;
+          this.notifyStateChange();
+          return this.speakWithWebSpeech(text);
+        }
+        throw error;
+      }
+    }
+
+    // Play the audio
+    return this.playAudioBlobWithState(audioBlob);
+  }
+
+  /**
+   * Speak using Gemini 2.5 Flash TTS - ULTRA-REALISTIC (OPTIMIZED FOR SPEED)
    */
   private async speakWithGeminiTTS(text: string): Promise<void> {
-    console.log('🎤 Gemini TTS (optimized)');
-    
+    console.log('🎤 Gemini 2.5 Flash TTS (Ultra-Realistic)');
+
     // Validate text is suitable for TTS
     if (!text || text.trim().length === 0) {
       console.warn('⚠️ Empty text, skipping Gemini TTS');
       return;
     }
-    
-    // If text is too short (< 3 chars), use fast TTS instead
-    if (text.trim().length < 3) {
-      console.log('📝 Text too short for Gemini TTS, using fast TTS');
-      return this.speakWithFastTTS(text);
+
+    // Check cache first (optional caching for frequently used phrases)
+    const cacheKey = `gemini_${text}_${this.config.voiceName}`;
+    const cached = await db.ttsCache
+      .where('text')
+      .equals(cacheKey)
+      .first();
+
+    if (cached && (Date.now() - cached.timestamp) < 3600000) { // Cache for 1 hour
+      console.log('✅ Using cached Gemini TTS audio');
+      return this.playAudioBlobWithState(cached.audioBlob);
     }
-    
-    // If text is too long (> 1500 chars), use fast TTS to avoid API issues
-    // Gemini TTS works well with medium-length texts but may have issues with very long ones
-    if (text.trim().length > 1500) {
-      console.log('📏 Text too long for Gemini TTS (>1500 chars), using fast TTS');
-      return this.speakWithFastTTS(text);
-    }
-    
+
     // Get API key from secure storage
     const apiKey = await secureStorage.getApiKey('VITE_GEMINI_API_KEY');
-    
+
     if (!apiKey) {
       throw new Error('Gemini API key not found. Please add it in Settings → 🔑 API Keys.');
     }
+
+    // Chunk long text for faster processing
+    const maxChunkSize = this.config.useTurboMode ? 150 : 250; // Smaller chunks in turbo mode
+    const chunks = this.chunkText(text, maxChunkSize);
+    console.log(`📤 Processing ${chunks.length} text chunk(s) with Gemini TTS ${this.config.useTurboMode ? '(TURBO MODE)' : ''}`);
+
+    // Generate all chunks in parallel for immediate playback
+    const chunkPromises = chunks.map((chunk, index) => 
+      this.generateChunkAudio(chunk, index === chunks.length - 1 ? cacheKey : null, apiKey)
+    );
+
+    // Process results as they complete, playing immediately
+    const results = await Promise.allSettled(chunkPromises);
     
-    // Keep full text, don't truncate (user wants full audio)
-    const textToSpeak = text;
-    
-    console.log(`📤 Sending to Gemini TTS: "${textToSpeak.substring(0, 50)}${textToSpeak.length > 50 ? '...' : ''}" (${textToSpeak.length} chars)`);
-    
+    // Create a playback queue to maintain order
+    const playbackQueue: Blob[] = [];
+    let isPlaying = false;
+
+    const playNextChunk = async () => {
+      if (playbackQueue.length === 0 || isPlaying) return;
+      
+      isPlaying = true;
+      const audioBlob = playbackQueue.shift()!;
+      
+      try {
+        await this.playAudioBlob(audioBlob);
+      } catch (error) {
+        console.warn('Chunk playback failed:', error);
+      } finally {
+        isPlaying = false;
+        // Play next chunk if available
+        playNextChunk();
+      }
+    };
+
+    // Process each result and add to playback queue
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        playbackQueue.push(result.value);
+        // Start playing if not already playing
+        if (!isPlaying) {
+          playNextChunk();
+        }
+      } else {
+        console.warn('Chunk generation failed:', result.reason);
+        // Fallback will be handled in generateChunkAudio
+      }
+    }
+
+    // Wait for all chunks to be played
+    while (playbackQueue.length > 0 || isPlaying) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+
+  /**
+   * Generate audio for a single chunk (with automatic fallback)
+   */
+  private async generateChunkAudio(text: string, cacheKey: string | null, apiKey: string): Promise<Blob> {
+    try {
+      return await this.processGeminiTTSChunk(text, cacheKey, apiKey);
+    } catch (error) {
+      console.warn(`⚠️ Gemini TTS chunk failed, falling back to fast TTS:`, error);
+      // Generate fallback immediately
+      return await this.generateFastTTSChunk(text);
+    }
+  }
+
+  /**
+   * Generate fast TTS chunk (used for fallback)
+   */
+  private async generateFastTTSChunk(text: string): Promise<Blob> {
+    const cacheKey = `fast_${text}_en-US-Neural2-C_1.0`;
+
+    // Check cache first
+    const cached = await db.ttsCache
+      .where('text')
+      .equals(cacheKey)
+      .first();
+
+    if (cached) {
+      console.log('✅ Using cached fast TTS audio for chunk');
+      return cached.audioBlob;
+    }
+
+    console.log('⚡ Generating fast TTS chunk with Google Cloud Neural2-C');
+
+    // Get API key from secure storage
+    const apiKey = await secureStorage.getApiKey('VITE_GEMINI_API_KEY');
+
+    if (!apiKey) {
+      throw new Error('Gemini API key not found. Please add it in Settings → 🔑 API Keys.');
+    }
+
+    // Use Google Cloud TTS directly for maximum reliability
+    const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
+
+    const requestBody = {
+      input: { text },
+      voice: {
+        languageCode: 'en-US', // Standard English
+        name: 'en-US-Neural2-C', // Natural female voice
+        ssmlGender: 'FEMALE'
+      },
+      audioConfig: {
+        audioEncoding: 'MP3',
+        speakingRate: this.config.speakingRate,
+        pitch: this.config.pitch.toString(),
+        volumeGainDb: this.config.volumeGainDb,
+        effectsProfileId: ['headphone-class-device']
+      }
+    };
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Fast TTS synthesis failed');
+      }
+
+      const data = await response.json();
+
+      if (!data.audioContent) {
+        throw new Error('No audio content in response');
+      }
+
+      // Convert base64 to blob
+      const audioData = data.audioContent;
+      const byteCharacters = atob(audioData);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const audioBlob = new Blob([byteArray], { type: 'audio/mpeg' });
+
+      // Cache the audio
+      try {
+        await db.ttsCache.add({
+          text: cacheKey,
+          voiceName: 'en-US-Neural2-C',
+          audioBlob,
+          timestamp: Date.now(),
+        });
+        console.log('💾 Cached fast TTS chunk audio');
+      } catch (cacheError) {
+        console.warn('Failed to cache chunk audio:', cacheError);
+      }
+
+      return audioBlob;
+    } catch (error: any) {
+      clearTimeout(timeout);
+      if (error.name === 'AbortError') {
+        console.warn('⏱️ Fast TTS chunk timeout');
+        throw error;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Process a single chunk with Gemini TTS
+   */
+  private async processGeminiTTSChunk(text: string, cacheKey: string | null, apiKey: string): Promise<Blob> {
     // Call Gemini 2.5 Flash TTS directly
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.config.model}:generateContent?key=${apiKey}`;
-    
+
     const requestBody = {
       contents: [{
         parts: [{
-          text: textToSpeak
+          text: text
         }]
       }],
       generationConfig: {
@@ -267,7 +559,7 @@ class TTSService {
     };
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000); // 60 second timeout for Gemini TTS
+    const timeout = setTimeout(() => controller.abort(), 15000); // Reduced to 15 seconds for speed
 
     try {
       const response = await fetch(url, {
@@ -285,44 +577,33 @@ class TTSService {
         const errorData = await response.json();
         const errorMessage = errorData.error?.message || 'Gemini TTS failed';
         console.warn(`%c⚠️ Gemini TTS API error (${response.status}): ${errorMessage}`, 'color: #f59e0b; font-weight: bold;');
-        console.log('%c🔄 Auto-fallback to Fast Google Cloud TTS', 'background: #3b82f6; color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;');
-        // Fallback to fast TTS instead of throwing error
-        return this.speakWithFastTTS(text);
+
+        // More aggressive fallback for any API error
+        console.log('%c🔄 Auto-fallback to reliable Fast Google Cloud TTS', 'background: #3b82f6; color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;');
+        return this.generateFastTTSChunk(text);
       }
 
       const data = await response.json();
-      
+
       // Check for blocked/refused generation
       const finishReason = data.candidates?.[0]?.finishReason;
       if (finishReason === 'OTHER' || finishReason === 'SAFETY' || finishReason === 'RECITATION') {
         console.warn(`%c⚠️ Gemini TTS refused (${finishReason})`, 'color: #f59e0b; font-weight: bold;');
+
         console.log('%c🔄 Auto-fallback to Fast Google Cloud TTS', 'background: #3b82f6; color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;');
-        return this.speakWithFastTTS(text);
+        return this.generateFastTTSChunk(text);
       }
-      
-      // Log response structure for debugging
-      console.log('🔍 Gemini TTS response structure:', {
-        hasCandidates: !!data.candidates,
-        candidatesLength: data.candidates?.length,
-        hasContent: !!data.candidates?.[0]?.content,
-        finishReason: finishReason,
-        partsLength: data.candidates?.[0]?.content?.parts?.length,
-        firstPartKeys: data.candidates?.[0]?.content?.parts?.[0] ? Object.keys(data.candidates[0].content.parts[0]) : []
-      });
-      
+
       // Extract audio data from response
       const audioPart = data.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
-      
+
       if (!audioPart || !audioPart.inlineData?.data) {
         console.warn('⚠️ No audio data in Gemini TTS response, falling back to fast TTS');
-        console.warn('📋 Full response:', JSON.stringify(data, null, 2).substring(0, 500));
-        // Fallback to fast TTS instead of throwing error
-        return this.speakWithFastTTS(text);
+        return this.generateFastTTSChunk(text);
       }
 
       const audioBase64 = audioPart.inlineData.data;
-      
-      console.log(`🎵 TTS audio ready`);
+      console.log(`🎵 Gemini TTS chunk audio ready (${this.config.voiceName} voice)`);
 
       // Convert base64 to blob
       const byteCharacters = atob(audioBase64);
@@ -331,125 +612,80 @@ class TTSService {
         byteNumbers[i] = byteCharacters.charCodeAt(i);
       }
       const byteArray = new Uint8Array(byteNumbers);
-      
+
       // Convert PCM to WAV
       const audioBlob = this.pcmToWav(byteArray, 24000, 16, 1);
 
-      // Play immediately (no caching = faster startup)
-      return this.playAudioBlob(audioBlob);
-      
+      // Cache if this is the first/last chunk and we have a cache key
+      if (cacheKey) {
+        try {
+          await db.ttsCache.add({
+            text: cacheKey,
+            voiceName: `gemini_${this.config.voiceName}`,
+            audioBlob,
+            timestamp: Date.now(),
+          });
+          console.log('💾 Cached Gemini TTS audio');
+        } catch (cacheError) {
+          console.warn('Failed to cache Gemini audio:', cacheError);
+        }
+      }
+
+      return audioBlob;
+
     } catch (error: any) {
       clearTimeout(timeout);
       if (error.name === 'AbortError') {
-        console.warn('%c⏱️ Gemini TTS timeout (>60s)', 'color: #f59e0b; font-weight: bold;');
+        console.warn('%c⏱️ Gemini TTS timeout (>15s)', 'color: #f59e0b; font-weight: bold;');
         console.log('%c🔄 Auto-fallback to Fast Google Cloud TTS', 'background: #3b82f6; color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;');
         // Fallback to fast TTS instead of throwing error
-        return this.speakWithFastTTS(text);
+        return this.generateFastTTSChunk(text);
       }
       throw error;
     }
   }
 
   /**
-   * Speak using Google Cloud TTS via proxy (FAST, INSTANT)
+   * Chunk text into smaller pieces for faster processing with style context
    */
-  private async speakWithFastTTS(text: string): Promise<void> {
-    const cacheKey = `fast_${text}_Neural2-C_1.0`;
-    
-    // Check cache first
-    const cached = await db.ttsCache
-      .where('text')
-      .equals(cacheKey)
-      .first();
-
-    let audioBlob: Blob;
-
-    if (cached) {
-      console.log('✅ Using cached fast TTS audio');
-      audioBlob = cached.audioBlob;
-    } else {
-      console.log('⚡ Generating fast TTS with Google Cloud Neural2-C');
-      
-      // Get API key from secure storage
-      const apiKey = await secureStorage.getApiKey('VITE_GEMINI_API_KEY');
-      
-      if (!apiKey) {
-        throw new Error('Gemini API key not found. Please add it in Settings → 🔑 API Keys.');
-      }
-      
-      // Call Google Cloud TTS directly (bypass proxy for speed)
-      const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
-      
-      const requestBody = {
-        input: { text },
-        voice: {
-          languageCode: 'en-US',
-          name: 'en-US-Neural2-C', // Fast, high-quality female voice
-          ssmlGender: 'FEMALE'
-        },
-        audioConfig: {
-          audioEncoding: 'MP3',
-          speakingRate: 1.0,
-          pitch: 0.0,
-          effectsProfileId: ['headphone-class-device']
-        }
-      };
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        
-        // Check for quota exceeded
-        if (errorData.error?.status === 'RESOURCE_EXHAUSTED' || errorData.error?.code === 429) {
-          console.warn('⚠️ Google Cloud TTS quota exceeded, falling back to Web Speech');
-          this.quotaExceeded = true;
-          this.state.usingFallback = true;
-          this.notifyStateChange();
-          return this.speakWithWebSpeech(text);
-        }
-        
-        throw new Error(errorData.error?.message || 'Fast TTS synthesis failed');
-      }
-
-      const data = await response.json();
-      
-      if (!data.audioContent) {
-        throw new Error('No audio content in response');
-      }
-
-      // Convert base64 to blob
-      const audioData = data.audioContent;
-      const byteCharacters = atob(audioData);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      audioBlob = new Blob([byteArray], { type: 'audio/mpeg' });
-
-      // Cache the audio
-      try {
-        await db.ttsCache.add({
-          text: cacheKey,
-          voiceName: 'Neural2-C',
-          audioBlob,
-          timestamp: Date.now(),
-        });
-        console.log('💾 Cached fast TTS audio');
-      } catch (cacheError) {
-        console.warn('Failed to cache audio:', cacheError);
-      }
+  private chunkText(text: string, maxLength: number): string[] {
+    if (text.length <= maxLength) {
+      // Add style context for single chunk
+      return [`(speaking in a friendly, helpful, and confident tone as Anshika AI assistant) ${text}`];
     }
 
-    // Play the audio
-    return this.playAudioBlob(audioBlob);
+    const chunks: string[] = [];
+    let remaining = text;
+
+    while (remaining.length > 0) {
+      if (remaining.length <= maxLength) {
+        // Add style context to final chunk
+        chunks.push(`(speaking in a friendly, helpful, and confident tone as Anshika AI assistant) ${remaining}`);
+        break;
+      }
+
+      // Find a good break point (sentence end or word boundary)
+      let breakPoint = maxLength;
+
+      // Try to break at sentence end
+      const sentenceEnd = remaining.lastIndexOf('.', maxLength);
+      if (sentenceEnd > maxLength * 0.7) {
+        breakPoint = sentenceEnd + 1;
+      } else {
+        // Try to break at word boundary
+        const spaceIndex = remaining.lastIndexOf(' ', maxLength);
+        if (spaceIndex > maxLength * 0.8) {
+          breakPoint = spaceIndex;
+        }
+      }
+
+      // Add style context to each chunk
+      const chunk = remaining.substring(0, breakPoint).trim();
+      chunks.push(`(speaking in a friendly, helpful, and confident tone as Anshika AI assistant) ${chunk}`);
+      remaining = remaining.substring(breakPoint).trim();
+    }
+
+    return chunks;
   }
 
   /**
@@ -489,13 +725,35 @@ class TTSService {
   }
 
   /**
-   * Play audio blob
+   * Play audio blob (for individual chunks - doesn't update global state)
    */
   private playAudioBlob(blob: Blob): Promise<void> {
     return new Promise((resolve, reject) => {
       const audioUrl = URL.createObjectURL(blob);
       this.currentAudio = new Audio(audioUrl);
-      
+
+      this.currentAudio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        resolve();
+      };
+
+      this.currentAudio.onerror = (error) => {
+        URL.revokeObjectURL(audioUrl);
+        reject(error);
+      };
+
+      this.currentAudio.play().catch(reject);
+    });
+  }
+
+  /**
+   * Play audio blob and update TTS state (for single audio playback)
+   */
+  private playAudioBlobWithState(blob: Blob): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const audioUrl = URL.createObjectURL(blob);
+      this.currentAudio = new Audio(audioUrl);
+
       this.currentAudio.onended = () => {
         this.state.isSpeaking = false;
         this.state.isPaused = false;
@@ -517,9 +775,7 @@ class TTSService {
 
       this.currentAudio.play().catch(reject);
     });
-  }
-
-  /**
+  }  /**
    * Fallback to Web Speech API
    */
   private async speakWithWebSpeech(text: string): Promise<void> {

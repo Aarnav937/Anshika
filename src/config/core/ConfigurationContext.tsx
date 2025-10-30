@@ -342,6 +342,8 @@ export const ConfigurationProvider: React.FC<ConfigurationProviderProps> = ({ ch
   // ============================================================================
 
   // Auto-refresh status periodically to detect issues
+  // DISABLED: Temporarily disabled to prevent potential refresh issues
+  /*
   useEffect(() => {
     if (!isInitialized) return;
 
@@ -353,6 +355,7 @@ export const ConfigurationProvider: React.FC<ConfigurationProviderProps> = ({ ch
 
     return () => clearInterval(statusInterval);
   }, [isInitialized, refreshStatus]);
+  */
 
   // ============================================================================
   // Render Provider

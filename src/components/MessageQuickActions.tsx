@@ -8,6 +8,11 @@ interface MessageQuickActionsProps {
   onCopy: () => void;
   onDelete: () => void;
   onReact: (emoji: string) => void;
+  streamingControls?: {
+    onCancel: () => void;
+    onPause: () => void;
+    onResume: () => void;
+  };
 }
 
 export const MessageQuickActions: React.FC<MessageQuickActionsProps> = ({
@@ -18,9 +23,39 @@ export const MessageQuickActions: React.FC<MessageQuickActionsProps> = ({
   onCopy,
   onDelete,
   onReact,
+  streamingControls,
 }) => {
   return (
     <div className="absolute right-2 top-2 flex items-center gap-1 bg-gray-800/95 backdrop-blur-sm rounded-lg px-2 py-1 shadow-lg border border-gray-700">
+      {/* Streaming Controls - Only for assistant messages during streaming */}
+      {streamingControls && (
+        <>
+          {/* Pause/Resume */}
+          <button
+            onClick={streamingControls.onPause}
+            className="p-1.5 hover:bg-gray-700 rounded transition-colors"
+            title="Pause streaming"
+            aria-label="Pause streaming"
+          >
+            <svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+
+          {/* Cancel */}
+          <button
+            onClick={streamingControls.onCancel}
+            className="p-1.5 hover:bg-gray-700 rounded transition-colors"
+            title="Cancel streaming"
+            aria-label="Cancel streaming"
+          >
+            <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </>
+      )}
+
       {/* Edit - Only for user messages */}
       {role === 'user' && onEdit && (
         <button

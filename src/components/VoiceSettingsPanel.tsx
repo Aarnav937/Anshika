@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 import { X, Volume2, Mic, Play, Pause, Square, Settings } from 'lucide-react';
 import { useTTS } from '../contexts/TTSContext';
 import { useSpeechRecognition } from '../contexts/SpeechRecognitionContext';
+import { TTSSettingsPanel } from './TTSSettingsPanel';
 
 interface VoiceSettingsPanelProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface VoiceSettingsPanelProps {
 
 export const VoiceSettingsPanel: React.FC<VoiceSettingsPanelProps> = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState<'tts' | 'stt'>('tts');
+  const [showTTSSettings, setShowTTSSettings] = useState(false);
 
   // TTS Context
   const { 
@@ -150,8 +152,8 @@ export const VoiceSettingsPanel: React.FC<VoiceSettingsPanelProps> = ({ isOpen, 
                   </label>
                   <p className="text-xs text-gray-400 mt-1">
                     {useHighQualityTTS 
-                      ? '🎭 Using experimental ultra-realistic voice (may fail sometimes)' 
-                      : '⚡ Using fast & reliable Google Cloud TTS (recommended)'
+                      ? '🎭 Using experimental ultra-realistic voice (Achernar commanding tone)' 
+                      : '⚡ Using fast & reliable Google Cloud TTS (default)'
                     }
                   </p>
                 </div>
@@ -241,14 +243,22 @@ export const VoiceSettingsPanel: React.FC<VoiceSettingsPanelProps> = ({ isOpen, 
                 </div>
               )}
 
-              {/* Fallback Notice */}
-              {ttsState.usingFallback && (
-                <div className="p-4 bg-yellow-900/20 border border-yellow-400/30 rounded-lg">
-                  <p className="text-sm text-yellow-300">
-                    ⚠️ Using fallback Web Speech API due to quota limits
-                  </p>
-                </div>
-              )}
+              {/* Advanced TTS Settings Button */}
+              <div className="p-4 bg-gradient-to-r from-indigo-900/30 to-purple-900/30 rounded-lg border border-indigo-400/20">
+                <button
+                  onClick={() => setShowTTSSettings(true)}
+                  className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg font-medium transition-all transform hover:scale-105"
+                >
+                  <Settings className="w-5 h-5" />
+                  Advanced Voice Settings
+                  <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                    Voice Selection & Style
+                  </span>
+                </button>
+                <p className="text-xs text-gray-400 mt-2 text-center">
+                  Choose voices, adjust pitch/volume, and add style instructions
+                </p>
+              </div>
             </div>
           ) : (
             <div className="space-y-6">
@@ -373,6 +383,12 @@ export const VoiceSettingsPanel: React.FC<VoiceSettingsPanelProps> = ({ isOpen, 
           )}
         </div>
       </div>
+
+      {/* TTS Settings Panel */}
+      <TTSSettingsPanel
+        isOpen={showTTSSettings}
+        onClose={() => setShowTTSSettings(false)}
+      />
     </div>
   );
 };

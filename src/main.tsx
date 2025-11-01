@@ -3,6 +3,15 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 
+// Polyfill Buffer and process for browser environment (needed for Spline)
+import { Buffer } from 'buffer'
+import process from 'process'
+
+window.Buffer = Buffer
+globalThis.Buffer = Buffer
+window.process = process
+globalThis.process = process
+
 // Global error handler to catch translations error
 window.addEventListener('error', (event) => {
   if (event.message.includes('translations') || event.error?.message?.includes('translations')) {

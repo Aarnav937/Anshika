@@ -30,12 +30,26 @@ export default {
       },
       animation: {
         'pulse-subtle': 'pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'spotlight': 'spotlight 2s ease .75s 1 forwards',
       },
       keyframes: {
         'pulse-subtle': {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.8' },
         },
+        'spotlight': {
+          '0%': {
+            opacity: '0',
+            transform: 'translate(-72%, -62%) scale(0.5)',
+          },
+          '100%': {
+            opacity: '1',
+            transform: 'translate(-50%,-40%) scale(1)',
+          },
+        },
+      },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
       },
     },
   },

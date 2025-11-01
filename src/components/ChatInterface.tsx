@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Trash2, Search, Mic, Image, X } from 'lucide-react';
+import { Send, Trash2, Search, Mic, Image, X, MessageSquare } from 'lucide-react';
 import { useChat } from '../contexts/ChatContext';
 import { useTTS } from '../contexts/TTSContext';
 import { useSpeechRecognition } from '../contexts/SpeechRecognitionContext';
@@ -220,7 +220,7 @@ const ChatInterface: React.FC = () => {
                   role: 'assistant',
                   mode: currentMode,
                 });
-              }
+              },
             });
           } else {
             const wrappedOfflineAddMessage = (message: { content: string; role: 'assistant'; mode: 'offline' }) => {
@@ -234,7 +234,6 @@ const ChatInterface: React.FC = () => {
           }
         } catch (error) {
           console.error('Error processing command via AI:', error);
-
           // Create enhanced error for better error handling
           const enhancedError = enhancedErrorService.createError(
             'API_RATE_LIMIT',
@@ -243,10 +242,8 @@ const ChatInterface: React.FC = () => {
               component: 'ChatInterface',
               action: 'processCommand',
               metadata: { command: parsed.command }
-            },
-            error instanceof Error ? error : undefined
+            }
           );
-
           const errorMessage = {
             content: `❌ ${enhancedError.title}: ${enhancedError.message}`,
             role: 'assistant' as const,
@@ -257,17 +254,15 @@ const ChatInterface: React.FC = () => {
           setLoading(false);
           abortControllerRef.current = null;
         }
-        return;
       } catch (error) {
-        console.error('❌ Command execution error:', error);
-
-        // Create enhanced error for command execution failures
+        console.error('Error parsing/executing command:', error);
+        // Create enhanced error for command parsing failures
         const enhancedError = enhancedErrorService.createError(
-          'VALIDATION_INPUT_TOO_LONG',
-          error instanceof Error ? error.message : 'Command execution failed',
+          'COMMAND_ERROR',
+          error instanceof Error ? error.message : 'Failed to process command',
           {
             component: 'ChatInterface',
-            action: 'executeCommand',
+            action: 'parseCommand',
             metadata: { command: userMessage }
           },
           error instanceof Error ? error : undefined
@@ -278,7 +273,6 @@ const ChatInterface: React.FC = () => {
           role: 'assistant',
           mode: currentMode
         });
-        return;
       }
     } else {
       // NATURAL LANGUAGE INTENT DETECTION (Task 3.2)
@@ -300,155 +294,80 @@ const ChatInterface: React.FC = () => {
       // The suggestion stays active until user accepts/dismisses it
       
       // Regular message - add it to chat with images
-      const messageData: any = { 
-        content: userMessage, 
-        role: 'user', 
-        mode: currentMode 
-      };
-      
-      // Add images to message if any selected
-      if (selectedImages.length > 0) {
-        messageData.images = selectedImages.map((file, index) => ({
+      addMessage({
+        content: userMessage,
+        role: 'user',
+        mode: currentMode,
+        images: selectedImages.length > 0 ? selectedImages.map((file, index) => ({
           file,
-          preview: imagePreviews[index]
-        }));
-      }
-      
-      addMessage(messageData);
-    }
+          preview: imagePreviews[index] || ''
+        })) : undefined
+      });
 
-    setLoading(true);
-
-    // Create new abort controller for this request
-    abortControllerRef.current = new AbortController();
-
-    // IMAGE GENERATION: /imagine command (LEGACY - kept for backwards compatibility)
-    if (userMessage.toLowerCase().startsWith('/imagine ')) {
-      const imagePrompt = userMessage.substring(9).trim(); // Remove "/imagine "
-      console.log('🎨 IMAGE GENERATION COMMAND:', imagePrompt);
-      
-      // Import and use image generation
-      const { generateImageInChat } = await import('../utils/chatImageGeneration');
-      await generateImageInChat(imagePrompt, addMessage, setLoading, currentMode);
-      return;
-    }
-
-    // DIRECT TOOL TEST: Bypass AI for testing
-    if (userMessage.toLowerCase().startsWith('direct_tool ')) {
-      const toolCommand = userMessage.substring(12).trim(); // Remove "direct_tool "
-      console.log('🧪 DIRECT TOOL TEST:', toolCommand);
+      // Send to AI
       setLoading(true);
+      abortControllerRef.current = new AbortController();
 
       try {
-        let result = '';
-        if (toolCommand === 'date') {
-          const { getDateInfo } = await import('../services/timeDateService');
-          result = getDateInfo();
-        } else if (toolCommand === 'time') {
-          const { getCurrentTime } = await import('../services/timeDateService');
-          result = getCurrentTime();
-        } else if (toolCommand.startsWith('weather ')) {
-          const { getCurrentWeather } = await import('../services/weatherService');
-          const location = toolCommand.substring(8);
-          result = await getCurrentWeather(location);
-        } else if (toolCommand.startsWith('search ')) {
-          const { performWebSearch } = await import('../services/webSearchService');
-          const query = toolCommand.substring(7);
-          result = await performWebSearch(query);
-        } else if (toolCommand.startsWith('create_task ')) {
-          const { createTask } = await import('../services/taskService');
-          const title = toolCommand.substring(12);
-          result = createTask(title);
-        } else if (toolCommand === 'list_tasks') {
-          const { listTasks } = await import('../services/taskService');
-          result = listTasks();
-        } else if (toolCommand.startsWith('delete_task ')) {
-          const { deleteTask } = await import('../services/taskService');
-          const taskId = toolCommand.substring(12);
-          result = deleteTask(taskId);
-        } else if (toolCommand.startsWith('toggle_task ')) {
-          const { toggleTaskStatus } = await import('../services/taskService');
-          const taskId = toolCommand.substring(12);
-          result = toggleTaskStatus(taskId);
-        }
-
-        addMessage({
-          content: `**Direct Tool Result:**\n${result}`,
-          role: 'assistant',
-          mode: currentMode,
-        });
-        setLoading(false);
-        return;
-      } catch (error) {
-        addMessage({
-          content: `❌ Direct tool failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          role: 'assistant',
-          mode: currentMode,
-        });
-        setLoading(false);
-        return;
-      }
-    }
-
-    try {
-      if (currentMode === 'online') {
-        // Use streaming for online mode
-        await startStreaming(userMessage, {
-          onComplete: (fullResponse: string) => {
+        if (currentMode === 'online') {
+          // Use streaming for online mode
+          await startStreaming(userMessage, {
+            onComplete: (fullResponse: string) => {
+              // Speak the AI response
+              if (autoSpeakEnabled) {
+                speak(fullResponse).catch(err => console.error('TTS error:', err));
+              }
+            },
+            onError: (error: Error) => {
+              console.error('Streaming error:', error);
+              // Add error message to chat
+              addMessage({
+                content: `❌ Streaming error: ${error.message}`,
+                role: 'assistant',
+                mode: currentMode,
+              });
+            },
+          }, selectedImages);
+        } else {
+          const wrappedOfflineAddMessage = (message: { content: string; role: 'assistant'; mode: 'offline' }) => {
+            addMessage(message);
             // Speak the AI response
             if (autoSpeakEnabled) {
-              speak(fullResponse).catch(err => console.error('TTS error:', err));
+              speak(message.content).catch(err => console.error('TTS error:', err));
+            }
+          };
+          await sendOllamaMessage(userMessage, wrappedOfflineAddMessage, selectedModel, offlineTemperature);
+        }
+      } catch (error) {
+        console.error('Error sending message:', error);
+
+        // Create enhanced error for message sending failures
+        const errorCode = !navigator.onLine ? 'NETWORK_OFFLINE' : 'API_RATE_LIMIT';
+        const enhancedError = enhancedErrorService.createError(
+          errorCode,
+          error instanceof Error ? error.message : 'Failed to send message',
+          {
+            component: 'ChatInterface',
+            action: 'sendMessage',
+            metadata: {
+              mode: currentMode,
+              messageLength: userMessage.length,
+              hasNetwork: navigator.onLine
             }
           },
-          onError: (error: Error) => {
-            console.error('Streaming error:', error);
-            // Add error message to chat
-            addMessage({
-              content: `❌ Streaming error: ${error.message}`,
-              role: 'assistant',
-              mode: currentMode,
-            });
-          }
-        }, selectedImages);
-      } else {
-        const wrappedOfflineAddMessage = (message: { content: string; role: 'assistant'; mode: 'offline' }) => {
-          addMessage(message);
-          // Speak the AI response
-          if (autoSpeakEnabled) {
-            speak(message.content).catch(err => console.error('TTS error:', err));
-          }
+          error instanceof Error ? error : undefined
+        );
+
+        const errorMessage = {
+          content: `❌ ${enhancedError.title}: ${enhancedError.message}`,
+          role: 'assistant' as const,
+          mode: currentMode,
         };
-        await sendOllamaMessage(userMessage, wrappedOfflineAddMessage, selectedModel, offlineTemperature);
+        addMessage(errorMessage);
+      } finally {
+        setLoading(false);
+        abortControllerRef.current = null;
       }
-    } catch (error) {
-      console.error('Error sending message:', error);
-
-      // Create enhanced error for message sending failures
-      const errorCode = !navigator.onLine ? 'NETWORK_OFFLINE' : 'API_RATE_LIMIT';
-      const enhancedError = enhancedErrorService.createError(
-        errorCode,
-        error instanceof Error ? error.message : 'Failed to send message',
-        {
-          component: 'ChatInterface',
-          action: 'sendMessage',
-          metadata: {
-            mode: currentMode,
-            messageLength: userMessage.length,
-            hasNetwork: navigator.onLine
-          }
-        },
-        error instanceof Error ? error : undefined
-      );
-
-      const errorMessage = {
-        content: `❌ ${enhancedError.title}: ${enhancedError.message}`,
-        role: 'assistant' as const,
-        mode: currentMode,
-      };
-      addMessage(errorMessage);
-    } finally {
-      setLoading(false);
-      abortControllerRef.current = null;
     }
   };
 
@@ -555,7 +474,7 @@ const ChatInterface: React.FC = () => {
           onError: (error: Error) => {
             console.error('Edit streaming error:', error);
             setEditPreviewData(prev => prev ? { ...prev, newResponse: `Error: ${error.message}`, isGenerating: false } : null);
-          }
+          },
         });
       } else {
         const wrappedOfflineAddMessage = (message: { content: string; role: 'assistant'; mode: 'offline' }) => {
@@ -728,13 +647,15 @@ const ChatInterface: React.FC = () => {
                 Mode: <span className="font-medium text-purple-600 dark:text-purple-400">{currentMode}</span>
               </div>
               {currentMode === 'online' && (
-                <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                  webSearchEnabled
-                    ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                }`}>
-                  {webSearchEnabled ? '🔍 Tools Enabled' : '🔍 Tools Disabled'}
-                </div>
+                <>
+                  <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                    webSearchEnabled
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                  }`}>
+                    {webSearchEnabled ? '🔍 Tools Enabled' : '🔍 Tools Disabled'}
+                  </div>
+                </>
               )}
             </div>
 
@@ -754,12 +675,66 @@ const ChatInterface: React.FC = () => {
         {/* Messages Area */}
         <div className="h-96 overflow-y-auto p-4 space-y-4 scrollbar-thin">
           {messages.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
-              <div className="text-center">
-                <p className="text-lg mb-2">Welcome to A.N.S.H.I.K.A.!</p>
-                <p className="text-sm">
-                  Switch between online (Gemini) and offline (Ollama) modes above.
-                </p>
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center max-w-2xl mx-auto px-6 py-8 animate-fade-in">
+                {/* Welcome Header */}
+                <div className="mb-6">
+                  <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 shadow-2xl mb-4 animate-bounce-in">
+                    <MessageSquare className="w-10 h-10 text-white" />
+                  </div>
+                  <h2 className="text-3xl font-bold bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent mb-2">
+                    Welcome to A.N.S.H.I.K.A.!
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-300 text-lg">
+                    Your AI-powered assistant for conversations, documents, and more
+                  </p>
+                </div>
+
+                {/* Quick Suggestion Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                  <button
+                    onClick={() => setInput("Tell me about the latest AI trends")}
+                    className="group p-4 bg-gradient-to-br from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 rounded-xl border border-blue-400/30 hover:border-blue-400/50 transition-all duration-300 text-left card-hover btn-press"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-blue-500/20 rounded-lg group-hover:scale-110 transition-transform">
+                        <MessageSquare className="w-5 h-5 text-blue-400" />
+                      </div>
+                      <h3 className="font-semibold text-gray-800 dark:text-gray-200">Start a Conversation</h3>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Ask me anything or have a natural conversation
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => setInput("/help")}
+                    className="group p-4 bg-gradient-to-br from-purple-500/10 to-pink-500/10 hover:from-purple-500/20 hover:to-pink-500/20 rounded-xl border border-purple-400/30 hover:border-purple-400/50 transition-all duration-300 text-left card-hover btn-press"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-purple-500/20 rounded-lg group-hover:scale-110 transition-transform">
+                        <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <h3 className="font-semibold text-gray-800 dark:text-gray-200">Get Help</h3>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Learn about commands and features
+                    </p>
+                  </button>
+                </div>
+
+                {/* Features List */}
+                <div className="text-sm text-gray-500 dark:text-gray-400 space-y-2">
+                  <p className="flex items-center justify-center gap-2">
+                    <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                    {currentMode === 'online' ? 'Connected to Gemini AI' : 'Running Offline with Ollama'}
+                  </p>
+                  <p className="text-xs">
+                    💡 Tip: Type <code className="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded font-mono">/</code> to see available commands
+                  </p>
+                </div>
               </div>
             </div>
           ) : (
@@ -959,10 +934,10 @@ const ChatInterface: React.FC = () => {
                 <button
                   onClick={() => {
                     const newState = !webSearchEnabled;
-                    console.log('🔘 Toggle clicked, changing from', webSearchEnabled, 'to', newState);
+                    console.log('🔘 Web search toggle clicked, changing from', webSearchEnabled, 'to', newState);
                     setWebSearchEnabled(newState);
                     // Force re-render check
-                    setTimeout(() => console.log('🔄 State after toggle:', newState), 0);
+                    setTimeout(() => console.log('🔄 Web search state after toggle:', newState), 0);
                   }}
                   className={`btn-press ripple interactive-element focus-ring touch-target touch-target-mobile flex items-center justify-center w-11 h-11 rounded-xl shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 tap-highlight no-select ${
                     webSearchEnabled

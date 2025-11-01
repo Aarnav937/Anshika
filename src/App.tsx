@@ -15,13 +15,13 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { VoiceSettingsPanel } from './components/VoiceSettingsPanel';
 import { ApiKeysPanel } from './components/ApiKeysPanel';
 import { BreadcrumbNavigation, useBreadcrumbNavigation } from './components/BreadcrumbNavigation';
-import { ContextualHelpTooltip } from './components/ContextualHelpTooltip';
 import { preloadCommonModels } from './services/ollamaService';
 import { setupFocusVisible, matchesShortcut } from './utils/accessibilityUtils';
 import TypographySettings from './components/TypographySettings';
 import PullToRefresh from './components/PullToRefresh';
 import SwipeNavigation from './components/SwipeNavigation';
 import ThemeToggle from './components/ThemeToggle';
+import { SplineRobot3D } from './components/SplineRobot3D';
 
 // Lazy-loaded components for code splitting
 const ChatInterface = lazy(() => import('./components/ChatInterface'));
@@ -192,85 +192,84 @@ function AppContent() {
         className="z-50"
       />
 
-      <div className="lg:ml-72 md:ml-64 sm:ml-56 xs:ml-52 min-h-screen">
-      <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4 lg:py-8">
-      {/* Breadcrumb Navigation */}
-      <div className="mb-4 lg:mb-6">
-        <BreadcrumbNavigation
-          items={breadcrumbs}
-          onNavigate={(item) => {
-            // Handle breadcrumb navigation
-            console.log('Navigate to:', item);
-          }}
-          className="mb-4"
-        />
-      </div>
+      <div className="lg:ml-72 md:ml-64 sm:ml-56 xs:ml-52 h-screen overflow-hidden">
+      <div className="w-full h-full px-4 py-2">
+      
+      {/* Main Layout with 3D Robot on Right */}
+      <div className="flex flex-col lg:flex-row gap-4 h-full">
+        {/* Left Content Area - Takes space, robot is fixed on right */}
+        <div className="flex-1 min-w-0 lg:max-w-[60%] xl:max-w-[55%] overflow-y-auto relative z-10">
+          {/* Breadcrumb Navigation - Compact */}
+          <div className="mb-3">
+            <BreadcrumbNavigation
+              items={breadcrumbs}
+              onNavigate={(item) => {
+                // Handle breadcrumb navigation
+                console.log('Navigate to:', item);
+              }}
+              className="mb-2"
+            />
+          </div>
 
-      {/* Header */}
-      <div className="text-center mb-6 lg:mb-8">
-          <div className="flex items-center justify-center gap-2 lg:gap-3 mb-3 lg:mb-4">
-            <div className="p-2 lg:p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl lg:rounded-2xl shadow-lg">
-              <MessageSquare className="w-6 h-6 lg:w-8 lg:h-8 text-white" />
+      {/* Header - Enhanced */}
+      <div className="text-center mb-3">
+          <div className="flex items-center justify-center gap-3 mb-2 animate-fade-in">
+            <div className="p-2.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl shadow-2xl animate-gradient">
+              <MessageSquare className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl lg:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent tracking-tight">
                 A.N.S.H.I.K.A.
               </h1>
-              <p className="text-xs lg:text-sm text-gray-300 dark:text-gray-300 mt-1">
+              <p className="text-xs text-gray-400 dark:text-gray-400">
                 Powered by Gemini & Ollama
               </p>
             </div>
           </div>
-          <p className="text-sm lg:text-base text-gray-600 dark:text-gray-300 max-w-2xl mx-auto px-4">
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xl mx-auto px-2">
             Switch between online (Gemini) and offline (Ollama) modes for seamless AI conversations
           </p>
 
           {/* Typography Settings Button */}
-          <div className="flex items-center justify-center gap-3 mt-4">
+          <div className="flex items-center justify-center gap-2 mt-2">
             <button
               onClick={() => setShowTypographySettings(true)}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-200 touch-target"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-200 shadow-md hover:shadow-lg btn-press"
               title="Typography Settings"
             >
-              <Type className="w-3 h-3" />
+              <Type className="w-3.5 h-3.5" />
               Typography
             </button>
             
             {/* Theme Toggle */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <ThemeToggle size="sm" />
             </div>
           </div>
 
         </div>
 
-        {/* Mode Controls */}
-         <div className="max-w-5xl mx-auto mb-6 lg:mb-8">
-           <div className="bg-purple-900/10 dark:bg-purple-900/20 backdrop-blur-2xl rounded-2xl lg:rounded-3xl shadow-2xl border border-purple-400/20 dark:border-purple-300/30 p-6 lg:p-8 card-hover state-transition">
-             <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
-               <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-8">
-                 <div className="flex items-center gap-4">
-                   <span className="text-base lg:text-lg font-semibold text-gray-100 dark:text-gray-100">
+        {/* Mode Controls - Compact Width */}
+         <div className="mb-3">
+           <div className="bg-purple-900/10 dark:bg-purple-900/20 backdrop-blur-2xl rounded-xl shadow-2xl border border-purple-400/20 dark:border-purple-300/30 p-3 card-hover state-transition max-w-3xl mx-auto">
+             <div className="flex flex-wrap items-center justify-between gap-3">
+               <div className="flex items-center gap-3">
+                 <div className="flex items-center gap-2">
+                   <span className="text-sm font-semibold text-gray-100 dark:text-gray-100">
                      Mode:
                    </span>
-                   <div className="flex items-center gap-3 bg-purple-900/20 dark:bg-purple-800/30 backdrop-blur-md px-4 py-2 rounded-full border border-purple-400/30 shadow-lg">
+                   <div className="flex items-center gap-2 bg-purple-900/20 dark:bg-purple-800/30 backdrop-blur-md px-3 py-1.5 rounded-full border border-purple-400/30 shadow-lg">
                      {currentMode === 'online' ? (
-                       <Wifi className="w-5 h-5 text-green-400" />
+                       <Wifi className="w-4 h-4 text-green-400" />
                      ) : (
-                       <WifiOff className="w-5 h-5 text-orange-400" />
+                       <WifiOff className="w-4 h-4 text-orange-400" />
                      )}
-                     <span className="text-base lg:text-lg font-semibold capitalize text-purple-100 dark:text-purple-100">
+                     <span className="text-sm font-semibold capitalize text-purple-100 dark:text-purple-100">
                        {currentMode}
                      </span>
-                     <ContextualHelpTooltip
-                       title="AI Mode Selection"
-                       content="Switch between online (Gemini) and offline (Ollama) modes. Online mode requires internet, offline works locally."
-                       variant="cosmic"
-                       size="sm"
-                     />
                    </div>
                  </div>
-                 <div className="flex items-center gap-4">
+                 <div className="flex items-center gap-2">
                    <ModeToggle
                      mode={currentMode}
                      onModeChange={setMode}
@@ -279,24 +278,24 @@ function AppContent() {
                    {/* API Keys Button */}
                    <button
                      onClick={() => setShowApiKeys(true)}
-                     className="relative p-3 rounded-xl bg-gradient-to-r from-green-500/20 to-emerald-500/20 hover:from-green-500/30 hover:to-emerald-500/30 border border-green-400/30 transition-all duration-300 group"
-                     title="API Keys Settings"
+                     className="relative p-2 rounded-lg bg-gradient-to-r from-green-500/20 to-emerald-500/20 hover:from-green-500/30 hover:to-emerald-500/30 border border-green-400/30 transition-all duration-300 btn-press"
+                     title="API Keys"
                    >
-                     <Key className="w-5 h-5 text-green-300" />
+                     <Key className="w-4 h-4 text-green-300" />
                    </button>
                    
-                   {/* Voice Settings Button (Combined TTS + STT) */}
+                   {/* Voice Settings Button */}
                    <button
                      onClick={() => setShowVoiceSettings(true)}
-                     className="relative p-3 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-400/30 transition-all duration-300 group"
-                     title="Voice Settings (Text-to-Speech & Speech-to-Text)"
+                     className="relative p-2 rounded-lg bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-400/30 transition-all duration-300 btn-press"
+                     title="Voice Settings"
                    >
-                     <Volume2 className={`w-5 h-5 transition-colors ${ttsState.isSpeaking ? 'text-purple-400 animate-pulse' : 'text-purple-300'}`} />
+                     <Volume2 className={`w-4 h-4 transition-colors ${ttsState.isSpeaking ? 'text-purple-400 animate-pulse' : 'text-purple-300'}`} />
                      {ttsState.isSpeaking && (
                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full animate-ping" />
                      )}
                      {autoSpeakEnabled && (
-                       <span className="absolute -bottom-1 -right-1 w-2 h-2 bg-green-500 rounded-full" />
+                       <span className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full" />
                      )}
                    </button>
                  </div>
@@ -309,12 +308,13 @@ function AppContent() {
                )}
              </div>
 
-            <div className="border-t border-purple-400/20 dark:border-purple-300/30 pt-6 mt-6">
+            {/* Temperature Control - Compact Width */}
+            <div className="border-t border-purple-400/20 dark:border-purple-300/30 pt-3 mt-3 max-w-md mx-auto">
               <TemperatureControl />
             </div>
 
             {/* Enhanced Status Indicator */}
-            <div className="mt-8 flex items-center justify-center">
+            <div className="mt-3 flex items-center justify-center">
               <EnhancedStatusIndicator
                 mode={currentMode}
                 isLoading={isLoading}
@@ -324,7 +324,7 @@ function AppContent() {
           </div>
         </div>
 
-        {/* Tab Content with Mobile Gestures */}
+        {/* Tab Content with Mobile Gestures - Now with Robot on Right */}
         <SwipeNavigation
           currentTab={activeTab.mainTab}
           tabs={['chat', 'document-intelligence', 'image-generation']}
@@ -348,6 +348,7 @@ function AppContent() {
             }}
             threshold={80}
           >
+            {/* Main Content Area */}
             <div className="transition-all duration-300 ease-in-out">
               {activeTab.mainTab === 'chat' && (
                 <div className="animate-fade-in">
@@ -391,6 +392,21 @@ function AppContent() {
           </PullToRefresh>
         </SwipeNavigation>
         </div>
+
+        {/* Right Side - 3D Robot - FULL SCREEN RIGHT SIDE */}
+        <div 
+          className="hidden lg:block fixed right-0 top-0 bottom-0 w-[40%] xl:w-[45%] pointer-events-none z-[5]" 
+          style={{ 
+            height: '100vh',
+            overflow: 'visible',
+          }}
+        >
+          {/* Robot takes FULL height of screen on the right */}
+          <SplineRobot3D className="w-full h-full" />
+        </div>
+
+      </div>
+      </div>
       </div>
 
       {/* API Keys Panel */}

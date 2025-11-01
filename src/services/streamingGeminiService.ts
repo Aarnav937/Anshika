@@ -391,7 +391,9 @@ export class StreamingGeminiService {
     processor: StreamProcessor,
     images?: File[]
   ): Promise<string> {
+    // Use default model
     const modelName = this.DEFAULT_MODEL;
+
     const url = `${this.BASE_URL}/${modelName}:streamGenerateContent?alt=sse&key=${this.apiKey}`;
 
     // 🎯 PHASE 2: Context Detection and Dynamic Personality Adjustment
@@ -450,7 +452,7 @@ export class StreamingGeminiService {
       }
     }
 
-    // Prepare request body
+    // Prepare request body with standard parameters
     const requestBody: {
       contents: Array<{
         parts: any[];
@@ -480,7 +482,7 @@ export class StreamingGeminiService {
         candidateCount: 1,
         stopSequences: [],
         topP: 0.95,
-        topK: 100
+        topK: 100,
       }
     };
 

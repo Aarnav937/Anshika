@@ -559,7 +559,7 @@ x   * Speak using Google Cloud TTS via proxy (FAST, RELIABLE)
     };
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000); // Reduced to 15 seconds for speed
+    const timeout = setTimeout(() => controller.abort(), 25000); // Increased to 25 seconds for more reliable high-quality TTS
 
     try {
       const response = await fetch(url, {
@@ -650,8 +650,8 @@ x   * Speak using Google Cloud TTS via proxy (FAST, RELIABLE)
    */
   private chunkText(text: string, maxLength: number): string[] {
     if (text.length <= maxLength) {
-      // Add style context for single chunk
-      return [`(speaking in a friendly, helpful, and confident tone as Anshika AI assistant) ${text}`];
+      // Single chunk - no prefix needed
+      return [text];
     }
 
     const chunks: string[] = [];
@@ -659,8 +659,8 @@ x   * Speak using Google Cloud TTS via proxy (FAST, RELIABLE)
 
     while (remaining.length > 0) {
       if (remaining.length <= maxLength) {
-        // Add style context to final chunk
-        chunks.push(`(speaking in a friendly, helpful, and confident tone as Anshika AI assistant) ${remaining}`);
+        // Final chunk - no prefix needed
+        chunks.push(remaining);
         break;
       }
 
@@ -679,9 +679,9 @@ x   * Speak using Google Cloud TTS via proxy (FAST, RELIABLE)
         }
       }
 
-      // Add style context to each chunk
+      // Add chunk without prefix
       const chunk = remaining.substring(0, breakPoint).trim();
-      chunks.push(`(speaking in a friendly, helpful, and confident tone as Anshika AI assistant) ${chunk}`);
+      chunks.push(chunk);
       remaining = remaining.substring(breakPoint).trim();
     }
 

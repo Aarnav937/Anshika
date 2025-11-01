@@ -157,6 +157,38 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Render right panel based on current mode
+  const renderRightPanel = () => {
+    switch (activeTab.mainTab) {
+      case 'document-intelligence':
+        // Document mode - keep existing behavior (full height robot or document-specific content)
+        return <SplineRobot3D className="w-full h-full" />;
+      
+      case 'image-generation':
+        // Image mode - keep existing behavior (full height robot or image-specific content)
+        return <SplineRobot3D className="w-full h-full" />;
+      
+      case 'chat':
+      default:
+        // Chat mode - split layout with placeholder on top and robot on bottom
+        return (
+          <>
+            {/* Top Half Placeholder */}
+            <div className="h-1/2 w-full border-b border-border flex items-center justify-center p-4">
+              <span className="text-muted-foreground text-center">
+                [Future component placeholder]
+              </span>
+            </div>
+
+            {/* Bottom Half for Robot */}
+            <div className="h-1/2 w-full relative">
+              <SplineRobot3D className="h-full w-full" />
+            </div>
+          </>
+        );
+    }
+  };
+
   return (
     <div className="min-h-screen cosmic-bg relative overflow-hidden">
       {/* Nebula overlay for cosmic atmosphere */}
@@ -193,12 +225,12 @@ function AppContent() {
       />
 
       <div className="lg:ml-72 md:ml-64 sm:ml-56 xs:ml-52 h-screen overflow-hidden">
-      <div className="w-full h-full px-4 py-2">
+      <div className="w-full h-full px-4 py-2 relative">
       
       {/* Main Layout with 3D Robot on Right */}
       <div className="flex flex-col lg:flex-row gap-4 h-full">
         {/* Left Content Area - Takes space, robot is fixed on right */}
-        <div className="flex-1 min-w-0 lg:max-w-[60%] xl:max-w-[55%] overflow-y-auto relative z-10">
+        <div className="flex-1 min-w-0 lg:pr-[calc(30%+1rem)] xl:pr-[calc(35%+1rem)] overflow-y-auto relative z-10">
           {/* Breadcrumb Navigation - Compact */}
           <div className="mb-3">
             <BreadcrumbNavigation
@@ -393,17 +425,12 @@ function AppContent() {
         </SwipeNavigation>
         </div>
 
-        {/* Right Side - 3D Robot - FULL SCREEN RIGHT SIDE */}
-        <div 
-          className="hidden lg:block fixed right-0 top-0 bottom-0 w-[40%] xl:w-[45%] pointer-events-none z-[5]" 
-          style={{ 
-            height: '100vh',
-            overflow: 'visible',
-          }}
+        {/* Right Sidebar - 3D Robot and Future Components - FIXED TO FAR RIGHT */}
+        <aside 
+          className="hidden lg:flex lg:flex-col fixed right-4 top-2 bottom-2 lg:w-[30%] xl:w-[35%] bg-gray-900/40 dark:bg-gray-900/60 backdrop-blur-md rounded-xl border border-purple-500/20 dark:border-purple-400/30 overflow-hidden shadow-2xl z-20"
         >
-          {/* Robot takes FULL height of screen on the right */}
-          <SplineRobot3D className="w-full h-full" />
-        </div>
+          {renderRightPanel()}
+        </aside>
 
       </div>
       </div>

@@ -40,6 +40,10 @@ function normalizeKeywords(keywords: string[] = []): string[] {
   return Array.from(seen);
 }
 
+function isFulfilled<T>(result: PromiseSettledResult<T>): result is PromiseFulfilledResult<T> {
+  return result.status === 'fulfilled';
+}
+
 export async function createMemory(input: MemoryUpsertInput): Promise<Memory> {
   const now = new Date();
   const normalizedKeywords = normalizeKeywords(input.keywords ?? []);
@@ -64,7 +68,8 @@ export async function createMemory(input: MemoryUpsertInput): Promise<Memory> {
 }
 
 export async function bulkAddMemories(memories: MemoryUpsertInput[]): Promise<Memory[]> {
-  return Promise.all(memories.map(memory => createMemory(memory)));
+  const results = await Promise.allSettled(memories.map(memory => createMemory(memory)));
+  return results.filter(isFulfilled).map(result => result.value);
 }
 
 export async function getMemory(id: string): Promise<Memory | undefined> {
@@ -72,8 +77,10 @@ export async function getMemory(id: string): Promise<Memory | undefined> {
 }
 
 export async function getActiveMemories(limit = 25): Promise<Memory[]> {
-  const allMemories = await memoryDb.memories.toArray();
-  return allMemories
+  // In-memory filtering avoids IndexedDB boolean key quirks across environments
+  const activeMemories = await memoryDb.memories.toArray();
+
+  return activeMemories
     .filter(memory => memory.isActive !== false)
     .sort((a, b) => b.lastAccessed.getTime() - a.lastAccessed.getTime())
     .slice(0, limit);

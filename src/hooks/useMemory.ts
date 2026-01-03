@@ -53,7 +53,7 @@ export function useMemory(): UseMemoryReturn {
 
   const addMemory = useCallback(async (memoryInput: MemoryUpsertInput) => {
     const stored = await createMemory(memoryInput);
-    setMemories(prev => [stored, ...prev.filter(m => m.id !== stored.id)]);
+    setMemories(prev => [stored, ...prev]);
     return stored;
   }, []);
 

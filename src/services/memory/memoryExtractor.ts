@@ -2,7 +2,16 @@ import { Memory, MemoryType } from '../../types/memory';
 
 const MIN_KEYWORD_LENGTH = 4;
 const MAX_KEYWORDS = 8;
-const FACT_PATTERN = /\b(i am|i'm|i work as|i live in)\s+([^.!\n]+)/i;
+const FACT_PATTERNS: Array<(text: string) => string | null> = [
+  (text: string) => {
+    const match = text.match(/\b(i am|i'm|i work as|i live in)\s+([^.!\n]+)/i);
+    return match ? `${match[1]} ${match[2]}`.trim() : null;
+  },
+  (text: string) => {
+    const match = text.match(/\bmy (?:role|job|profession)\s+is\s+([^.!\n]+)/i);
+    return match ? `my role is ${match[1].trim()}` : null;
+  },
+];
 
 function makeMemory(
   type: MemoryType,
@@ -115,9 +124,8 @@ export async function extractMemoriesFromMessage(
     );
   }
 
-  const factsMatch = userMessage.match(FACT_PATTERN);
-  if (factsMatch) {
-    const fact = `${factsMatch[1]} ${factsMatch[2]}`.trim();
+  const fact = FACT_PATTERNS.map(pattern => pattern(userMessage)).find(Boolean);
+  if (fact) {
     memories.push(
       makeMemory(
         'fact',

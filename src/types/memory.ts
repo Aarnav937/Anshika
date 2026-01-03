@@ -33,7 +33,7 @@ export interface MemoryContext {
 export interface UserProfile {
   id?: string;
   name?: string;
-  preferences: Record<string, any>;
+  preferences: Record<string, unknown>;
   facts: string[];
   communicationStyle?: 'formal' | 'casual' | 'technical';
 }

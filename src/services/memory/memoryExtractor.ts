@@ -1,5 +1,9 @@
 import { Memory, MemoryType } from '../../types/memory';
 
+const MIN_KEYWORD_LENGTH = 4;
+const MAX_KEYWORDS = 8;
+const FACT_PATTERN = /\b(i am|i'm|i work as|i live in)\s+([^.!\n]+)/i;
+
 function makeMemory(
   type: MemoryType,
   content: string,
@@ -34,8 +38,8 @@ function extractKeywords(text: string): string[] {
   return text
     .toLowerCase()
     .split(/\W+/)
-    .filter(token => token.length > 3)
-    .slice(0, 8);
+    .filter(token => token.length >= MIN_KEYWORD_LENGTH)
+    .slice(0, MAX_KEYWORDS);
 }
 
 /**
@@ -111,7 +115,7 @@ export async function extractMemoriesFromMessage(
     );
   }
 
-  const factsMatch = userMessage.match(/\b(i am|i'm|i work as|i live in)\s+([^.!\n]+)/i);
+  const factsMatch = userMessage.match(FACT_PATTERN);
   if (factsMatch) {
     const fact = `${factsMatch[1]} ${factsMatch[2]}`.trim();
     memories.push(

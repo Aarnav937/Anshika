@@ -22,8 +22,9 @@ interface MemoryContextOptions {
   limit?: number;
 }
 
+const PROFILE_ID = 'default';
 const DEFAULT_PROFILE: UserProfile = {
-  id: 'default',
+  id: PROFILE_ID,
   preferences: {},
   facts: [],
 };
@@ -133,10 +134,10 @@ export async function updateMemoryContent(id: string, updates: Partial<Omit<Memo
 }
 
 export async function getUserProfile(): Promise<UserProfile> {
-  const stored = await memoryDb.userProfile.get(DEFAULT_PROFILE.id!);
+  const stored = await memoryDb.userProfile.get(PROFILE_ID);
   if (!stored) {
-    await memoryDb.userProfile.put(DEFAULT_PROFILE);
-    return DEFAULT_PROFILE;
+    await memoryDb.userProfile.put({ ...DEFAULT_PROFILE, id: PROFILE_ID });
+    return { ...DEFAULT_PROFILE, id: PROFILE_ID };
   }
   return {
     ...DEFAULT_PROFILE,
@@ -146,7 +147,7 @@ export async function getUserProfile(): Promise<UserProfile> {
       ...(stored.preferences ?? {}),
     },
     facts: stored.facts ?? [],
-    id: DEFAULT_PROFILE.id,
+    id: stored.id || PROFILE_ID,
   };
 }
 
@@ -155,7 +156,7 @@ export async function saveUserProfile(profile: Partial<UserProfile>): Promise<Us
   const merged: UserProfile = {
     ...existing,
     ...profile,
-    id: DEFAULT_PROFILE.id,
+    id: PROFILE_ID,
     preferences: {
       ...existing.preferences,
       ...(profile.preferences ?? {}),

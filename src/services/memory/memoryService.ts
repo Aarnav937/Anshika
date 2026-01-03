@@ -72,14 +72,11 @@ export async function getMemory(id: string): Promise<Memory | undefined> {
 }
 
 export async function getActiveMemories(limit = 25): Promise<Memory[]> {
-  const active = await memoryDb.memories
-    .orderBy('lastAccessed')
-    .reverse()
+  const allMemories = await memoryDb.memories.toArray();
+  return allMemories
     .filter(memory => memory.isActive !== false)
-    .limit(limit)
-    .toArray();
-
-  return active;
+    .sort((a, b) => b.lastAccessed.getTime() - a.lastAccessed.getTime())
+    .slice(0, limit);
 }
 
 export async function findMemoriesByKeywords(keywords: string[], limit = 10): Promise<Memory[]> {
@@ -88,14 +85,15 @@ export async function findMemoriesByKeywords(keywords: string[], limit = 10): Pr
     return getActiveMemories(limit);
   }
 
-  const matches = await memoryDb.memories
-    .where('keywords')
-    .anyOf(normalized)
-    .filter(memory => memory.isActive !== false)
-    .limit(limit)
-    .toArray();
+  const activeMemories = await memoryDb.memories.toArray();
 
-  return matches.sort((a, b) => b.lastAccessed.getTime() - a.lastAccessed.getTime());
+  const matches = activeMemories
+    .filter(memory => memory.isActive !== false)
+    .filter(memory => memory.keywords.some(keyword => normalized.includes(keyword)));
+
+  return matches
+    .sort((a, b) => b.lastAccessed.getTime() - a.lastAccessed.getTime())
+    .slice(0, limit);
 }
 
 export async function recordMemoryAccess(id: string): Promise<void> {

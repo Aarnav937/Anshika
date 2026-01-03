@@ -19,6 +19,8 @@ const baseSource = {
 
 describe('memoryService', () => {
   beforeEach(async () => {
+    await memoryDb.delete();
+    await memoryDb.open();
     await memoryDb.memories.clear();
     await memoryDb.userProfile.clear();
   });

@@ -8,6 +8,7 @@ import {
   getUserProfile,
   recordMemoryAccess,
   saveUserProfile,
+  setMemoryActive,
 } from '../memory/memoryService';
 
 const baseSource = {
@@ -54,11 +55,7 @@ describe('memoryService', () => {
       confidence: 0.5,
       source: baseSource,
     });
-    await createMemory({
-      ...inactive,
-      id: inactive.id,
-      isActive: false,
-    });
+    await setMemoryActive(inactive.id, false);
 
     const matches = await findMemoriesByKeywords(['coffee', 'tea']);
     expect(matches).toHaveLength(1);

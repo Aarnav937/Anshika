@@ -63,11 +63,7 @@ export async function createMemory(input: MemoryUpsertInput): Promise<Memory> {
 }
 
 export async function bulkAddMemories(memories: MemoryUpsertInput[]): Promise<Memory[]> {
-  const stored: Memory[] = [];
-  for (const memory of memories) {
-    stored.push(await createMemory(memory));
-  }
-  return stored;
+  return Promise.all(memories.map(memory => createMemory(memory)));
 }
 
 export async function getMemory(id: string): Promise<Memory | undefined> {

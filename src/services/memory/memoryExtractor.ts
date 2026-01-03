@@ -111,9 +111,9 @@ export async function extractMemoriesFromMessage(
     );
   }
 
-  const factsMatch = combined.match(/is\s+(a|an|the)\s+([^.!\n]+)/i);
+  const factsMatch = userMessage.match(/\b(i am|i'm|i work as|i live in)\s+([^.!\n]+)/i);
   if (factsMatch) {
-    const fact = factsMatch[2].trim();
+    const fact = `${factsMatch[1]} ${factsMatch[2]}`.trim();
     memories.push(
       makeMemory(
         'fact',

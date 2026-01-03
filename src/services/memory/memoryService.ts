@@ -81,7 +81,7 @@ export async function getActiveMemories(limit = 25): Promise<Memory[]> {
   const activeMemories = await memoryDb.memories.toArray();
 
   return activeMemories
-    .filter(memory => memory.isActive !== false)
+    .filter(memory => (memory.isActive ?? true) === true)
     .sort((a, b) => b.lastAccessed.getTime() - a.lastAccessed.getTime())
     .slice(0, limit);
 }
@@ -95,7 +95,7 @@ export async function findMemoriesByKeywords(keywords: string[], limit = 10): Pr
   const activeMemories = await memoryDb.memories.toArray();
 
   const matches = activeMemories
-    .filter(memory => memory.isActive !== false)
+    .filter(memory => (memory.isActive ?? true) === true)
     .filter(memory => memory.keywords.some(keyword => normalized.includes(keyword)));
 
   return matches

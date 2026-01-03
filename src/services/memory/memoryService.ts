@@ -44,6 +44,17 @@ function isFulfilled<T>(result: PromiseSettledResult<T>): result is PromiseFulfi
   return result.status === 'fulfilled';
 }
 
+async function loadActiveMemories(): Promise<Memory[]> {
+  try {
+    return await memoryDb.memories
+      .filter(memory => (memory.isActive ?? true) === true)
+      .toArray();
+  } catch {
+    // Fallback for environments that do not support boolean indexes consistently
+    return memoryDb.memories.toArray();
+  }
+}
+
 export async function createMemory(input: MemoryUpsertInput): Promise<Memory> {
   const now = new Date();
   const normalizedKeywords = normalizeKeywords(input.keywords ?? []);
@@ -77,8 +88,7 @@ export async function getMemory(id: string): Promise<Memory | undefined> {
 }
 
 export async function getActiveMemories(limit = 25): Promise<Memory[]> {
-  // In-memory filtering avoids IndexedDB boolean key quirks across environments
-  const activeMemories = await memoryDb.memories.toArray();
+  const activeMemories = await loadActiveMemories();
 
   return activeMemories
     .filter(memory => (memory.isActive ?? true) === true)
@@ -92,7 +102,7 @@ export async function findMemoriesByKeywords(keywords: string[], limit = 10): Pr
     return getActiveMemories(limit);
   }
 
-  const activeMemories = await memoryDb.memories.toArray();
+  const activeMemories = await loadActiveMemories();
 
   const matches = activeMemories
     .filter(memory => (memory.isActive ?? true) === true)

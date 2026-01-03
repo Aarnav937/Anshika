@@ -124,7 +124,15 @@ export async function extractMemoriesFromMessage(
     );
   }
 
-  const fact = FACT_PATTERNS.map(pattern => pattern(userMessage)).find(result => result !== null);
+  let fact: string | null = null;
+  for (const pattern of FACT_PATTERNS) {
+    const result = pattern(userMessage);
+    if (result) {
+      fact = result;
+      break;
+    }
+  }
+
   if (fact) {
     memories.push(
       makeMemory(

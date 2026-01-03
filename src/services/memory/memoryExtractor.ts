@@ -94,7 +94,7 @@ export async function extractMemoriesFromMessage(
     );
   }
 
-  const instructionMatch = combined.match(/please\s+(?:respond|reply|address)\s+([^.!\n]+)/i);
+  const instructionMatch = combined.match(/please\s+([^.!\n]+)/i);
   if (instructionMatch) {
     const instruction = instructionMatch[1].trim();
     memories.push(
@@ -124,26 +124,21 @@ export async function extractMemoriesFromMessage(
     );
   }
 
-  let fact: string | null = null;
   for (const pattern of FACT_PATTERNS) {
     const result = pattern(userMessage);
     if (result) {
-      fact = result;
+      memories.push(
+        makeMemory(
+          'fact',
+          result,
+          extractKeywords(result),
+          conversationId,
+          messageId,
+          0.55
+        )
+      );
       break;
     }
-  }
-
-  if (fact) {
-    memories.push(
-      makeMemory(
-        'fact',
-        fact,
-        extractKeywords(fact),
-        conversationId,
-        messageId,
-        0.55
-      )
-    );
   }
 
   return memories;
